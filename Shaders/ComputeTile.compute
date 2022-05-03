@@ -1,0 +1,125 @@
+// Each #kernel tells which function to compile; you can have many kernels
+#pragma kernel CSMain
+
+#include"FastNoiseLite.hlsl"
+
+#define SEAORLAND_SCALE 3000.0
+#define MOUNTAIN_HEIGHT (10000 * 1)
+#define MOUNTAIN_SCALE 50000
+#define HILL_HEIGHT 800.0
+#define HILL_SCALE 300000
+#define PLANE_HEIGHT 30
+#define PLANE_SCALE 50000
+
+// Create a RenderTexture with enableRandomWrite flag and set it
+// with cs.SetTexture
+
+RWStructuredBuffer<int> TriangleMap;
+RWStructuredBuffer<float3> Direction;
+RWStructuredBuffer<float3> Vertices;
+float Radius;
+uint Resolution;
+int seed;
+bool isSea;
+static fnl_state mountainNoise;
+static fnl_state plainNoise;
+static fnl_state seaOrLandNoise;
+static fnl_state mountainOrPlainNoise;
+static bool isInitNoise = false;
+
+static void InitNoise()
+{
+    if(isInitNoise) return;
+    mountainNoise = fnlCreateState();
+    mountainNoise.seed = seed;
+    mountainNoise.noise_type = FNL_NOISE_PERLIN;
+    mountainNoise.frequency = 0.002f;
+    mountainNoise.fractal_type = FNL_FRACTAL_RIDGED;
+    mountainNoise.octaves = 6;
+    mountainNoise.lacunarity = 2.2f;
+    mountainNoise.gain = 0.6f;
+    mountainNoise.weighted_strength = 1.8f;
+    mountainNoise.domain_warp_type = FNL_DOMAIN_WARP_OPENSIMPLEX2;
+    mountainNoise.domain_warp_amp = 30;
+
+    plainNoise = fnlCreateState();
+    plainNoise.seed = seed;
+    plainNoise.noise_type = FNL_NOISE_PERLIN;
+    plainNoise.frequency = 0.3f;
+    plainNoise.fractal_type = FNL_FRACTAL_FBM;
+    plainNoise.octaves = 3;
+    plainNoise.lacunarity = 2.2f;
+    plainNoise.gain = 2.3f;
+    plainNoise.weighted_strength = 0.8f;
+
+    seaOrLandNoise = fnlCreateState();
+    seaOrLandNoise.seed = seed;
+    seaOrLandNoise.noise_type = FNL_NOISE_PERLIN;
+    seaOrLandNoise.frequency = 0.0025;
+
+    mountainOrPlainNoise = fnlCreateState();
+    mountainOrPlainNoise.seed = seed;
+    mountainOrPlainNoise.noise_type = FNL_NOISE_PERLIN;
+    mountainOrPlainNoise.frequency = 0.025;
+    mountainOrPlainNoise.fractal_type = FNL_FRACTAL_RIDGED;
+    mountainOrPlainNoise.octaves = 3;
+    mountainOrPlainNoise.lacunarity = 1.0f;
+    mountainOrPlainNoise.gain = 3.0f;
+    mountainOrPlainNoise.weighted_strength = 3.0f;
+
+
+    isInitNoise = true;
+};
+
+
+[numthreads(17,17,1)]
+void CSMain (uint3 id : SV_DispatchThreadID)
+{
+    InitNoise();//初始化噪声值
+    uint index = id.x + id.y * Resolution;//计算数组下标
+    float3 tempVec = Direction[0] + Direction[2] * TriangleMap[index*2] + Direction[1] * TriangleMap[index*2+1];//生成顶点
+    tempVec = normalize(tempVec);//归一化
+    if(isSea)
+    {
+        Vertices[index] = Radius * tempVec;//如果是海洋则不需要随机高度
+        return;
+    }
+
+    //权重噪声
+    float seaOrLand = fnlGetNoise3D(seaOrLandNoise,tempVec.x * SEAORLAND_SCALE,tempVec.y * SEAORLAND_SCALE,tempVec.z * SEAORLAND_SCALE);
+    //权重噪声
+    float mountainOrPlain = fnlGetNoise3D(mountainOrPlainNoise,tempVec.x * SEAORLAND_SCALE,tempVec.y * SEAORLAND_SCALE,tempVec.z * SEAORLAND_SCALE);
+
+    //山峦地形
+    float noise = fnlGetNoise3D(mountainNoise,tempVec.x * MOUNTAIN_SCALE,tempVec.y * MOUNTAIN_SCALE,tempVec.z * MOUNTAIN_SCALE);
+    float3 mountian =  tempVec * MOUNTAIN_HEIGHT * noise;
+
+    //丘陵地形
+    noise = fnlGetNoise3D(mountainNoise,tempVec.x * HILL_SCALE,tempVec.y * HILL_SCALE,tempVec.z * HILL_SCALE);
+    float3 hill = tempVec * HILL_HEIGHT * saturate(lerp(0,1,seaOrLand*1000/2)) * noise;
+
+    noise = fnlGetNoise3D(plainNoise,tempVec.x * PLANE_SCALE,tempVec.y * PLANE_SCALE,tempVec.z * PLANE_SCALE);
+    float3 plane = tempVec * PLANE_HEIGHT * noise;
+
+    float3 ret;
+    if(seaOrLand > 0)
+    {
+        ret = plane + hill;
+        if(mountainOrPlain>0.3)
+        {
+            ret+=mountian;
+        }else
+        {
+            ret+=lerp(tempVec*0,mountian,saturate(mountainOrPlain*10));
+        }
+        if(seaOrLand<0.01)
+        {
+            ret *= lerp(0,1,saturate(seaOrLand*100));
+        }
+    }else
+    {
+        ret = -lerp(hill,mountian + hill,smoothstep(0,1,-seaOrLand)) * pow(100000,seaOrLand) * 100;
+    }
+
+    Vertices[index] = tempVec * Radius + ret;
+}
