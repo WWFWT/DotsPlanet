@@ -12,6 +12,8 @@ public class Sphere
     public static ComputeShader computeVertexShader;
     public static float radius;
     public static Material tileMt;
+    public static Material seaMt;
+    public static Vector3 pos;
 
     //ECSœ‡πÿ
     public static Entity sphere;
@@ -121,14 +123,15 @@ public class Sphere
                 level = 0
             }) ;
 
-            //entity = entityManager.CreateEntity(tileLeafTypes);
-            //entityManager.SetComponentData<Tile>(entity, new Tile
-            //{
-            //    triangleVertexs = triangleVertexs,
-            //    isSea = true,
-            //    canDestory = false,
-            //    level = 0
-            //});
+            entity = entityManager.CreateEntity(tileLeafTypes);
+            entityManager.SetComponentData<Tile>(entity, new Tile
+            {
+                op = TileOperation.non,
+                triangleVertexs = triangleVertexs,
+                isSea = true,
+                isLeaf = true,
+                level = 0
+            });
         }
 
     }
@@ -140,6 +143,7 @@ public class Sphere
         translation.Value.y -= player.position.y;
         translation.Value.z -= player.position.z;
         entityManager.SetComponentData<Translation>(sphere, translation);
+        pos = translation.Value;
         player.position = Vector3.zero;
     }
 }

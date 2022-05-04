@@ -60,7 +60,7 @@ public partial class TileSystem : SystemBase
     const float levelDist = 120; //决定第一层持续多少米，之每一层以此为基准增加
     static int maxLevel = 0;
     const float accuracy = 10f; //最大精度
-    const float updateTime = 0.05f;
+    const float updateTime = 0.1f;
     float timer = 0f;
     public static GameObject tileGameObjectPrefab;
 
@@ -143,11 +143,10 @@ public partial class TileSystem : SystemBase
         }
         willHide.Clear();
 
-        NativeArray<Entity> ang = new NativeArray<Entity>();
-
         int tempMaxLevel = maxLevel;
         //检测需要更新的模型
-        Entities.ForEach((Entity entity, ref Tile tile, in WorldRenderBounds renderBounds) =>
+        Entities
+        .ForEach((Entity entity, ref Tile tile, in WorldRenderBounds renderBounds) =>
         {
             if (!tile.isLeaf) return;
 
@@ -165,7 +164,6 @@ public partial class TileSystem : SystemBase
         })
         .ScheduleParallel();
 
-        float useTime = 0;
         EntityQuery entityQuery = entityMgr.CreateEntityQuery(new EntityQueryDesc { Any = new ComponentType[] { ComponentType.ReadWrite<Tile>() } });
         NativeArray<Entity> entities = entityQuery.ToEntityArray(Allocator.Temp);
         Job.WithCode(() =>
@@ -487,11 +485,11 @@ public partial class TileSystem : SystemBase
         mesh.vertices = SubdivideTriangles(originalVertices, tile.isSea);
         mesh.triangles = triangleIndexs;
         mesh.uv = uv;
-        mesh.RecalculateBounds();
+        //mesh.RecalculateBounds();
         mesh.RecalculateNormals();
-        mesh.RecalculateTangents();
+        //mesh.RecalculateTangents();
         renderMesh.mesh = mesh;
-        renderMesh.material = Sphere.tileMt;
+        renderMesh.material = tile.isSea?Sphere.seaMt:Sphere.tileMt;
         renderMesh.layerMask = 1;
 
         renderBounds.Value.Center = mesh.bounds.center;

@@ -7,6 +7,7 @@ public class GameMgr : MonoBehaviour
 {
     public Transform player;
     public Material material;
+    public Material seaMt;
     public ComputeShader computeShader;
     public GameObject tilePrefab;
 
@@ -18,9 +19,10 @@ public class GameMgr : MonoBehaviour
         sphere = new Sphere();
         Sphere.radius = 6371*1000;
         Sphere.tileMt = material;
+        Sphere.seaMt = seaMt;
         Sphere.computeVertexShader = computeShader;
         Sphere.player = player;
-        player.position = new Vector3(0, 0, -Sphere.radius * 2);
+        player.position = new Vector3(0, 0, -Sphere.radius * 1.5f);
         TileSystem.tileGameObjectPrefab = tilePrefab;
 
         TileSystem tileSystem = World.DefaultGameObjectInjectionWorld.GetOrCreateSystem<TileSystem>();
