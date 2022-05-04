@@ -26,13 +26,6 @@ enum TileOperation
 
 struct Tile: IComponentData
 {
-    //四叉树结构
-    public Entity parent;
-    public Entity childTop;
-    public Entity childMid;
-    public Entity childLeft;
-    public Entity childRight;
-
     //将要进行的操作
     public TileOperation op;
     //LOD水平
@@ -51,6 +44,12 @@ struct Tile: IComponentData
         return ret;
     }
 }
+
+public struct VerticesBuffer : IBufferElementData 
+{
+    public Vector3 vertex;
+}
+
 
 [BurstCompile]
 [DisableAutoCreation]
@@ -74,11 +73,13 @@ public partial class TileSystem : SystemBase
     int kernelHandle;
     NativeArray<Vector3> vectors; //细分三角形时候存储三角形的各个方向
     NativeArray<Vector3> vertices; //细分三角形时候存储三角形的顶点
+    NativeList<Entity> willHide;
     Vector3[] calVexRet;
 
     //避免细分次数一样的三角形重复计算
-    private static int[] triangleIndexs;
-    public readonly static List<int> triangleMap = new List<int>();
+    static int[] triangleIndexs;
+    readonly static List<int> triangleMap = new List<int>();
+    static Vector2[] uv;
 
     protected override void OnCreate()
     {
@@ -96,13 +97,17 @@ public partial class TileSystem : SystemBase
     protected override void OnStartRunning()
     {
         base.OnStartRunning();
-        var setting = GameObjectConversionSettings.FromWorld(World.DefaultGameObjectInjectionWorld, null);
+        var tempParam = new BlobAssetStore();
+        var setting = GameObjectConversionSettings.FromWorld(World.DefaultGameObjectInjectionWorld, tempParam);
         tilePrefab = GameObjectConversionUtility.ConvertGameObjectHierarchy(tileGameObjectPrefab, setting);
+        tempParam.Dispose();
         if (tilePrefab == Entity.Null)
         {
             Debug.LogError("找不到TilePrefab  prefab:"+ tileGameObjectPrefab + "   setting:" + setting);
             return;
         }
+        entityMgr.AddComponent<LocalToParent>(tilePrefab);
+        entityMgr.AddComponent<Parent>(tilePrefab);
 
         EntityQuery entityQuery = entityMgr.CreateEntityQuery(new EntityQueryDesc { All = new ComponentType[] { ComponentType.ReadWrite<Tile>() } });
         NativeArray<Entity> entities = entityQuery.ToEntityArray(Allocator.Temp);
@@ -114,6 +119,11 @@ public partial class TileSystem : SystemBase
             entityMgr.AddComponent<Tile>(entity);
             entityMgr.SetComponentData(entity, tile);
             entityMgr.SetName(entity, "Tile_0");
+
+            Parent parent = entityMgr.GetComponentData<Parent>(entity);
+            parent.Value = Sphere.sphere;
+            entityMgr.SetComponentData<Parent>(entity,parent);
+
             CreateTileMesh(entity, tile, tile.triangleVertexs);
             entityMgr.DestroyEntity(entities[i]);
         }
@@ -123,21 +133,22 @@ public partial class TileSystem : SystemBase
     [BurstCompile]
     protected override void OnUpdate()
     {
-        Translation sphere = entityMgr.GetComponentData<Translation>(Sphere.sphere);
-        Entities.WithAny<Tile>().ForEach((ref Translation translation) =>
-        {
-            translation = sphere;
-        }).ScheduleParallel();
-
         timer += Time.DeltaTime;
         if (timer < updateTime) return;
         timer = 0;
 
+        foreach (Entity entity in willHide)
+        {
+            SetMeshVisibale(entity, false);
+        }
+        willHide.Clear();
+
+        NativeArray<Entity> ang = new NativeArray<Entity>();
+
         int tempMaxLevel = maxLevel;
         //检测需要更新的模型
-        Entities.ForEach((Entity entity, ref Tile tile, ref Translation translation, in WorldRenderBounds renderBounds) =>
+        Entities.ForEach((Entity entity, ref Tile tile, in WorldRenderBounds renderBounds) =>
         {
-            translation = sphere;
             if (!tile.isLeaf) return;
 
             float dist = Vector3.Distance(Vector3.zero, renderBounds.Value.ToBounds().ClosestPoint(Vector3.zero));
@@ -154,6 +165,7 @@ public partial class TileSystem : SystemBase
         })
         .ScheduleParallel();
 
+        float useTime = 0;
         EntityQuery entityQuery = entityMgr.CreateEntityQuery(new EntityQueryDesc { Any = new ComponentType[] { ComponentType.ReadWrite<Tile>() } });
         NativeArray<Entity> entities = entityQuery.ToEntityArray(Allocator.Temp);
         Job.WithCode(() =>
@@ -165,11 +177,17 @@ public partial class TileSystem : SystemBase
                 if (tile.op == TileOperation.split)
                 {
                     Split(entities[i]);
+                    timer = updateTime + 1;//下一帧继续
+                    break;
                 }
                 else if (tile.op == TileOperation.merge)
                 {
                     bool mergeSuc = Merge(entities[i]);
-                    if (mergeSuc) break;//有些实体删除了，防止访问到删除的实体
+                    if (mergeSuc)
+                    {
+                        timer = updateTime + 1;//下一帧继续
+                        break;//有些实体删除了，防止访问到删除的实体
+                    }
                 }
             }
         })
@@ -185,6 +203,7 @@ public partial class TileSystem : SystemBase
         if (triangleMapBuffer != null) triangleMapBuffer.Release();
         if (vertices != null && vertices.IsCreated) vertices.Dispose();
         if (vectors != null && vectors.IsCreated) vectors.Dispose();
+        if (willHide.IsCreated) willHide.Dispose();
         base.OnDestroy();
     }
 
@@ -281,11 +300,33 @@ public partial class TileSystem : SystemBase
                 triangleMap.Add(bottomIndex);
             }
         }
+
+        List<Vector2> tempUV = new List<Vector2>();
+
+
+        //底边为1，高则为0.866
+        float sidePointCount = resolution + 3;
+        float oneHeight = 0.866f / sidePointCount;
+        float oneWidth = 1.0f / sidePointCount;
+
+        Vector2 tempVec = new Vector2();
+
+        for (int i = 0; i < sidePointCount; i++)
+        {
+            tempVec.x = oneHeight * i;
+            for (int j = 0; j < i; j++)
+            {
+                tempVec.y = oneWidth * j;
+                tempUV.Add(tempVec);
+            }
+        }
+        uv = tempUV.ToArray();
     }
 
     void AllocateMem()
     {
         calVexRet = new Vector3[oneMeshVerticesCount];
+        willHide = new NativeList<Entity>(16, Allocator.Persistent);
     }
 
     void InitComputeShader()
@@ -318,6 +359,8 @@ public partial class TileSystem : SystemBase
     [BurstCompile]
     void Split(Entity parent)
     {
+        entityMgr.AddBuffer<Child>(parent);
+
         Tile parentTile = entityMgr.GetComponentData<Tile>(parent);
         TriangleVertexs originalVertices = new TriangleVertexs();
         Vector3 left = (parentTile.triangleVertexs.top + parentTile.triangleVertexs.left) / 2.0f;
@@ -327,32 +370,27 @@ public partial class TileSystem : SystemBase
         originalVertices.top = parentTile.triangleVertexs.top;
         originalVertices.left = left;
         originalVertices.right = right;
-        Entity childEntity = CreateTileChild(parent, parentTile, originalVertices);
-        parentTile.childTop = childEntity;
+        CreateTileChild(parent, parentTile, originalVertices);
 
         originalVertices.top = left;
         originalVertices.left = parentTile.triangleVertexs.left;
         originalVertices.right = bottom;
-        childEntity = CreateTileChild(parent, parentTile, originalVertices);
-        parentTile.childLeft = childEntity;
+        CreateTileChild(parent, parentTile, originalVertices);
 
         originalVertices.top = right;
         originalVertices.left = bottom;
         originalVertices.right = parentTile.triangleVertexs.right;
-        childEntity = CreateTileChild(parent, parentTile, originalVertices);
-        parentTile.childRight = childEntity;
+        CreateTileChild(parent, parentTile, originalVertices);
 
         originalVertices.top = bottom;
         originalVertices.left = right;
         originalVertices.right = left;
-        childEntity = CreateTileChild(parent, parentTile, originalVertices);
-        parentTile.childMid = childEntity;
+        CreateTileChild(parent, parentTile, originalVertices);
 
         parentTile.isLeaf = false;
         parentTile.op = TileOperation.non;
         entityMgr.SetComponentData<Tile>(parent, parentTile);
-        //entityMgr.SetEnabled(parent, false);
-        HideMesh(parent, false);
+        willHide.Add(parent);
     }
 
     [BurstCompile]
@@ -360,21 +398,32 @@ public partial class TileSystem : SystemBase
     {
         Tile tile = entityMgr.GetComponentData<Tile>(entity);
 
-        if (tile.parent == Entity.Null) return false;
+        if (!tile.isLeaf) return false;
+        Entity parentEntity = entityMgr.GetComponentData<Parent>(entity).Value;
+        Tile parentTile = entityMgr.GetComponentData<Tile>(parentEntity);
+        DynamicBuffer<Child> children = entityMgr.GetBuffer<Child>(parentEntity);
+        if (children.Length < 4)
+        {
+            Debug.LogError("Merge:缺少孩子节点");
+            return false;
+        }
 
-        Tile parentTile = entityMgr.GetComponentData<Tile>(tile.parent);
+        Entity child1 = children[0].Value;
+        Entity child2 = children[1].Value;
+        Entity child3 = children[2].Value;
+        Entity child4 = children[3].Value;
 
-        Tile tileTop = entityMgr.GetComponentData<Tile>(parentTile.childTop);
-        Tile tileMid = entityMgr.GetComponentData<Tile>(parentTile.childMid);
-        Tile tileLeft = entityMgr.GetComponentData<Tile>(parentTile.childLeft);
-        Tile tileRight = entityMgr.GetComponentData<Tile>(parentTile.childRight);
+        Tile tileTop = entityMgr.GetComponentData<Tile>(child1);
+        Tile tileMid = entityMgr.GetComponentData<Tile>(child2);
+        Tile tileLeft = entityMgr.GetComponentData<Tile>(child3);
+        Tile tileRight = entityMgr.GetComponentData<Tile>(child4);
 
-        if (tileTop.op == TileOperation.merge && 
+        if (tileTop.op == TileOperation.merge &&
             tileMid.op == TileOperation.merge &&
             tileLeft.op == TileOperation.merge &&
             tileRight.op == TileOperation.merge)
         {
-            WorldRenderBounds renderBounds = entityMgr.GetComponentData<WorldRenderBounds>(tile.parent);
+            WorldRenderBounds renderBounds = entityMgr.GetComponentData<WorldRenderBounds>(parentEntity);
             float dist = Vector3.Distance(Vector3.zero, renderBounds.Value.ToBounds().ClosestPoint(Vector3.zero));
             int tempLevel = GetLevel(dist, maxLevel);
             if (parentTile.level < tempLevel)
@@ -383,30 +432,28 @@ public partial class TileSystem : SystemBase
                 return false;
             }
 
-            //entityMgr.SetEnabled(tile.parent, true);
-
-            HideMesh(tile.parent, true);
-            if (parentTile.childTop != Entity.Null) entityMgr.DestroyEntity(parentTile.childTop);
-            if (parentTile.childMid != Entity.Null) entityMgr.DestroyEntity(parentTile.childMid);
-            if (parentTile.childLeft != Entity.Null) entityMgr.DestroyEntity(parentTile.childLeft);
-            if (parentTile.childRight != Entity.Null) entityMgr.DestroyEntity(parentTile.childRight);
+            SetMeshVisibale(parentEntity, true);
+            if (entityMgr.Exists(child1)) entityMgr.DestroyEntity(child1);
+            if (entityMgr.Exists(child2)) entityMgr.DestroyEntity(child2);
+            if (entityMgr.Exists(child3)) entityMgr.DestroyEntity(child3);
+            if (entityMgr.Exists(child4)) entityMgr.DestroyEntity(child4);
 
             parentTile.op = TileOperation.non;
             parentTile.isLeaf = true;
-            entityMgr.SetComponentData<Tile>(tile.parent, parentTile);
+            entityMgr.RemoveComponent<Child>(parentEntity);
+            entityMgr.SetComponentData<Tile>(parentEntity, parentTile);
             return true;
         }
         return false;
     }
 
     [BurstCompile]
-    Entity CreateTileChild(Entity parent, Tile parentTile, TriangleVertexs originalVertices)
+    void CreateTileChild(Entity parent, Tile parentTile, TriangleVertexs originalVertices)
     {
         Entity newEntity = entityMgr.Instantiate(tilePrefab);
         entityMgr.AddComponent<Tile>(newEntity);
         Tile tile = new Tile
         {
-            parent = parent,
             op = TileOperation.non,
             level = parentTile.level + 1,
             triangleVertexs = originalVertices,
@@ -415,8 +462,17 @@ public partial class TileSystem : SystemBase
         };
         entityMgr.SetName(newEntity, "Tile_" + tile.level);
         entityMgr.SetComponentData<Tile>(newEntity, tile);
+
+        Parent parentCom = entityMgr.GetComponentData<Parent>(newEntity);
+        parentCom.Value = parent;
+        entityMgr.SetComponentData<Parent>(newEntity, parentCom);
+
+        DynamicBuffer<Child> childs = entityMgr.GetBuffer<Child>(parent);
+        Child childCom = new Child();
+        childCom.Value = newEntity;
+        childs.Add(childCom);
+
         CreateTileMesh(newEntity, tile, originalVertices);
-        return newEntity;
     }
 
     [BurstCompile]
@@ -430,6 +486,7 @@ public partial class TileSystem : SystemBase
         mesh.name = "Tile";
         mesh.vertices = SubdivideTriangles(originalVertices, tile.isSea);
         mesh.triangles = triangleIndexs;
+        mesh.uv = uv;
         mesh.RecalculateBounds();
         mesh.RecalculateNormals();
         mesh.RecalculateTangents();
@@ -444,11 +501,11 @@ public partial class TileSystem : SystemBase
         entityMgr.SetComponentData<RenderBounds>(entity, renderBounds);
     }
 
-    void HideMesh(Entity entity,bool show)
+    void SetMeshVisibale(Entity entity,bool show)
     {
         if (!entityMgr.HasComponent<RenderMesh>(entity))
         {
-            Debug.LogError("HideMesh:该实体无RenderMesh组件");
+            Debug.LogError("SetMeshVisibale:该实体无RenderMesh组件");
             return;
         }
         RenderMesh renderMesh = entityMgr.GetSharedComponentData<RenderMesh>(entity);
