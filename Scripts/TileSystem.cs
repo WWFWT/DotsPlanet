@@ -6,6 +6,7 @@ using Unity.Burst;
 using Unity.Collections;
 using System.Collections.Generic;
 using Unity.Mathematics;
+using UnityEngine.Rendering;
 
 public enum TrianglePos
 {
@@ -21,20 +22,19 @@ public struct TriangleVertexs
 
 enum TileOperation
 {
-    non,split,merge
+    non, split, merge
 }
 
-struct Tile: IComponentData
+struct Tile : IComponentData
 {
-    //½«Òª½øĞĞµÄ²Ù×÷
-    public TileOperation op;
-    //LODË®Æ½
+    public bool canMerge;
+    //LODæ°´å¹³
     public int level;
-    //Èı½ÇĞÎµÄÈı¸öÎ»ÖÃµÄ¶¥µã
+    //ä¸‰è§’å½¢çš„ä¸‰ä¸ªä½ç½®çš„é¡¶ç‚¹
     public TriangleVertexs triangleVertexs;
-    //ÊÇ·ñÊÇº£Ñó
+    //æ˜¯å¦æ˜¯æµ·æ´‹
     public bool isSea;
-    //ÊÇ·ñÒ¶×Ó½Úµã
+    //æ˜¯å¦å¶å­èŠ‚ç‚¹
     public bool isLeaf;
 
     public override string ToString()
@@ -45,9 +45,17 @@ struct Tile: IComponentData
     }
 }
 
-public struct VerticesBuffer : IBufferElementData 
+public struct Vertices : IBufferElementData
 {
     public Vector3 vertex;
+    public static implicit operator Vector3(Vertices vertices)
+    {
+        return vertices.vertex;
+    }
+    public static implicit operator Vertices(Vector3 e)
+    {
+        return new Vertices { vertex = e };
+    }
 }
 
 
@@ -57,9 +65,9 @@ public partial class TileSystem : SystemBase
 {
     const int resolution = 286;
     static int oneMeshVerticesCount = 0;
-    const float levelDist = 120; //¾ö¶¨µÚÒ»²ã³ÖĞø¶àÉÙÃ×£¬Ö®Ã¿Ò»²ãÒÔ´ËÎª»ù×¼Ôö¼Ó
+    const float levelDist = 120; //å†³å®šç¬¬ä¸€å±‚æŒç»­å¤šå°‘ç±³ï¼Œä¹‹æ¯ä¸€å±‚ä»¥æ­¤ä¸ºåŸºå‡†å¢åŠ 
     static int maxLevel = 0;
-    const float accuracy = 10f; //×î´ó¾«¶È
+    const float accuracy = 10f; //æœ€å¤§ç²¾åº¦
     const float updateTime = 0.1f;
     float timer = 0f;
     public static GameObject tileGameObjectPrefab;
@@ -71,15 +79,18 @@ public partial class TileSystem : SystemBase
     ComputeBuffer directionBuffer;
     ComputeBuffer triangleMapBuffer;
     int kernelHandle;
-    NativeArray<Vector3> vectors; //Ï¸·ÖÈı½ÇĞÎÊ±ºò´æ´¢Èı½ÇĞÎµÄ¸÷¸ö·½Ïò
-    NativeArray<Vector3> vertices; //Ï¸·ÖÈı½ÇĞÎÊ±ºò´æ´¢Èı½ÇĞÎµÄ¶¥µã
+    NativeArray<Vector3> vectors; //ç»†åˆ†ä¸‰è§’å½¢æ—¶å€™å­˜å‚¨ä¸‰è§’å½¢çš„å„ä¸ªæ–¹å‘
+    NativeArray<Vector3> vertices; //ç»†åˆ†ä¸‰è§’å½¢æ—¶å€™å­˜å‚¨ä¸‰è§’å½¢çš„é¡¶ç‚¹
     NativeList<Entity> willHide;
     Vector3[] calVexRet;
+    NativeList<Entity> leafs;
 
-    //±ÜÃâÏ¸·Ö´ÎÊıÒ»ÑùµÄÈı½ÇĞÎÖØ¸´¼ÆËã
+    //é¿å…ç»†åˆ†æ¬¡æ•°ä¸€æ ·çš„ä¸‰è§’å½¢é‡å¤è®¡ç®—
     static int[] triangleIndexs;
     readonly static List<int> triangleMap = new List<int>();
     static Vector2[] uv;
+
+    ObjectPool<Mesh> meshPool = new ObjectPool<Mesh>(null, null, false);
 
     protected override void OnCreate()
     {
@@ -103,7 +114,7 @@ public partial class TileSystem : SystemBase
         tempParam.Dispose();
         if (tilePrefab == Entity.Null)
         {
-            Debug.LogError("ÕÒ²»µ½TilePrefab  prefab:"+ tileGameObjectPrefab + "   setting:" + setting);
+            Debug.LogError("æ‰¾ä¸åˆ°TilePrefab  prefab:" + tileGameObjectPrefab + "   setting:" + setting);
             return;
         }
         entityMgr.AddComponent<LocalToParent>(tilePrefab);
@@ -122,9 +133,10 @@ public partial class TileSystem : SystemBase
 
             Parent parent = entityMgr.GetComponentData<Parent>(entity);
             parent.Value = Sphere.sphere;
-            entityMgr.SetComponentData<Parent>(entity,parent);
+            entityMgr.SetComponentData<Parent>(entity, parent);
 
             CreateTileMesh(entity, tile, tile.triangleVertexs);
+            leafs.Add(entity);
             entityMgr.DestroyEntity(entities[i]);
         }
         entities.Dispose();
@@ -143,53 +155,35 @@ public partial class TileSystem : SystemBase
         }
         willHide.Clear();
 
-        int tempMaxLevel = maxLevel;
-        //¼ì²âĞèÒª¸üĞÂµÄÄ£ĞÍ
-        Entities
-        .ForEach((Entity entity, ref Tile tile, in WorldRenderBounds renderBounds) =>
-        {
-            if (!tile.isLeaf) return;
 
-            float dist = Vector3.Distance(Vector3.zero, renderBounds.Value.ToBounds().ClosestPoint(Vector3.zero));
-            int tempLevel = GetLevel(dist, tempMaxLevel);
-
-            if (tile.level < tempLevel)
-            {
-                tile.op = TileOperation.split;
-            }
-            else if (tile.level > tempLevel)
-            {
-                tile.op = TileOperation.merge;
-            }
-        })
-        .ScheduleParallel();
-
-        EntityQuery entityQuery = entityMgr.CreateEntityQuery(new EntityQueryDesc { Any = new ComponentType[] { ComponentType.ReadWrite<Tile>() } });
-        NativeArray<Entity> entities = entityQuery.ToEntityArray(Allocator.Temp);
         Job.WithCode(() =>
         {
-            for (int i = 0; i < entities.Length; i++)
+            for (int i = 0; i < leafs.Length; i++)
             {
-                Tile tile = entityMgr.GetComponentData<Tile>(entities[i]);
+                WorldRenderBounds renderBounds = entityMgr.GetComponentData<WorldRenderBounds>(leafs[i]);
+                float dist = Vector3.Distance(Vector3.zero, renderBounds.Value.ToBounds().ClosestPoint(Vector3.zero));
+                int tempLevel = GetLevel(dist, maxLevel);
+                Tile tile = entityMgr.GetComponentData<Tile>(leafs[i]);
                 if (!tile.isLeaf) continue;
-                if (tile.op == TileOperation.split)
+
+                if (tile.level < tempLevel)
                 {
-                    Split(entities[i]);
-                    timer = updateTime + 1;//ÏÂÒ»Ö¡¼ÌĞø
+                    Split(leafs[i]);
                     break;
                 }
-                else if (tile.op == TileOperation.merge)
+                else if (tile.level > tempLevel)
                 {
-                    bool mergeSuc = Merge(entities[i]);
+                    tile.canMerge = true;
+                    entityMgr.SetComponentData<Tile>(leafs[i], tile);
+                    bool mergeSuc = Merge(leafs[i]);
                     if (mergeSuc)
                     {
-                        timer = updateTime + 1;//ÏÂÒ»Ö¡¼ÌĞø
-                        break;//ÓĞĞ©ÊµÌåÉ¾³ıÁË£¬·ÀÖ¹·ÃÎÊµ½É¾³ıµÄÊµÌå
+                        timer = updateTime + 1;//ä¸‹ä¸€å¸§ç»§ç»­
+                        break;//æœ‰äº›å®ä½“åˆ é™¤äº†ï¼Œé˜²æ­¢è®¿é—®åˆ°åˆ é™¤çš„å®ä½“
                     }
                 }
             }
         })
-        .WithDisposeOnCompletion(entities)
         .WithoutBurst()
         .Run();
     }
@@ -202,18 +196,19 @@ public partial class TileSystem : SystemBase
         if (vertices != null && vertices.IsCreated) vertices.Dispose();
         if (vectors != null && vectors.IsCreated) vectors.Dispose();
         if (willHide.IsCreated) willHide.Dispose();
+        if (leafs.IsCreated) leafs.Dispose();
         base.OnDestroy();
     }
 
     /// <summary>
-    /// ÓÖÈı¸ö¶¥µãÏ¸·Ö³öÒ»×é¾ùÔÈµÄÈı½ÇĞÎµÄ¶¥µã
+    /// åˆä¸‰ä¸ªé¡¶ç‚¹ç»†åˆ†å‡ºä¸€ç»„å‡åŒ€çš„ä¸‰è§’å½¢çš„é¡¶ç‚¹
     /// </summary>
-    /// <param name="triangleV">Ô­Ê¼µÄÈı¸ö¶¥µã</param>
+    /// <param name="triangleV">åŸå§‹çš„ä¸‰ä¸ªé¡¶ç‚¹</param>
     /// <returns></returns>
     [BurstCompile]
     Vector3[] SubdivideTriangles(TriangleVertexs triangleV, bool isSea)
     {
-        //Èç¹û²»ÊÇº£Ñó¾ÍÌí¼ÓÈ¹±ß
+        //å¦‚æœä¸æ˜¯æµ·æ´‹å°±æ·»åŠ è£™è¾¹
         if (!isSea)
         {
             Vector3 topAdd = (triangleV.top - triangleV.left) / (float)(resolution + 1.0f) + (triangleV.top - triangleV.right) / (float)(resolution + 1.0f);
@@ -225,7 +220,7 @@ public partial class TileSystem : SystemBase
             triangleV.right += rightAdd;
         }
 
-        //¸÷¸ö·½ÏòÏ¸·ÖµÄÏòÁ¿
+        //å„ä¸ªæ–¹å‘ç»†åˆ†çš„å‘é‡
         vectors[(int)TrianglePos.left] = (triangleV.left - triangleV.top) / (float)(resolution + 1.0f);
         vectors[(int)TrianglePos.middle] = (triangleV.right - triangleV.left) / (float)(resolution + 1.0f);
         vectors[(int)TrianglePos.top] = triangleV.top;
@@ -235,7 +230,7 @@ public partial class TileSystem : SystemBase
         directionBuffer.SetData(vectors);
         Sphere.computeVertexShader.SetBuffer(kernelHandle, "Direction", directionBuffer);
         Sphere.computeVertexShader.SetBool("isSea", isSea);
-        Sphere.computeVertexShader.Dispatch(kernelHandle, 12, 12, 1);//5ºÍ7 »òÕß12ºÍ17
+        Sphere.computeVertexShader.Dispatch(kernelHandle, 12, 12, 1);//5å’Œ7 æˆ–è€…12å’Œ17
         verticesBuffer.GetData(calVexRet);
 
         return calVexRet;
@@ -246,7 +241,7 @@ public partial class TileSystem : SystemBase
         List<int> newTriangles = new List<int>();
         int leftPointCount = 2 + resolution;
 
-        //Á¬½ÓÈı½ÇĞÎ Á¬½ÓË³ĞòÓëµÈ²îÊıÁĞÏà¹Ø
+        //è¿æ¥ä¸‰è§’å½¢ è¿æ¥é¡ºåºä¸ç­‰å·®æ•°åˆ—ç›¸å…³
         for (int n = 2; n <= leftPointCount; n++)
         {
             int temp = n * (1 + n) / 2 - 1;
@@ -255,7 +250,7 @@ public partial class TileSystem : SystemBase
             int temp2 = n * (1 + n) / 2 - 1;
             int top2 = (n - 1) * (1 + (n - 1)) / 2 - 1;
 
-            //Á¬½ÓÕı³£Èı½ÇĞÎ
+            //è¿æ¥æ­£å¸¸ä¸‰è§’å½¢
             for (int c = 1; c < n; c++)
             {
                 newTriangles.Add(temp);
@@ -264,7 +259,7 @@ public partial class TileSystem : SystemBase
                 temp--;
                 top--;
             }
-            //Á¬½Óµ¹Á¢µÄÈı½ÇĞÎ
+            //è¿æ¥å€’ç«‹çš„ä¸‰è§’å½¢
             for (int c = 2; c < n; c++)
             {
                 newTriangles.Add(top2 - 1);
@@ -279,19 +274,19 @@ public partial class TileSystem : SystemBase
         int num = resolution + 2;
         oneMeshVerticesCount = (num * (1 + num)) / 2;
 
-        //Ò»¸öÈı½ÇÃæÒ»Ìõ±ßµÄ»¡³¤
+        //ä¸€ä¸ªä¸‰è§’é¢ä¸€æ¡è¾¹çš„å¼§é•¿
         int length = (int)(60.0 * Mathf.PI * Sphere.radius) / 180;
-        //ÉèÖÃ×î´ó²ã¼¶
+        //è®¾ç½®æœ€å¤§å±‚çº§
         maxLevel = Mathf.RoundToInt(Mathf.Log(length / (accuracy * resolution), 2));
         if (maxLevel < 0) maxLevel = 0;
 
-        //×İÏòĞèÒª²¼ÖÃµÄµã
+        //çºµå‘éœ€è¦å¸ƒç½®çš„ç‚¹
         for (int leftIndex = 0; leftIndex < leftPointCount; leftIndex++)
         {
             triangleMap.Add(leftIndex);
             triangleMap.Add(0);
 
-            //ºáÏòĞèÒª²¼ÖÃµÄµã
+            //æ¨ªå‘éœ€è¦å¸ƒç½®çš„ç‚¹
             for (int bottomIndex = 1; bottomIndex <= leftIndex; bottomIndex++)
             {
                 triangleMap.Add(leftIndex);
@@ -302,7 +297,7 @@ public partial class TileSystem : SystemBase
         List<Vector2> tempUV = new List<Vector2>();
 
 
-        //µ×±ßÎª1£¬¸ßÔòÎª0.866
+        //åº•è¾¹ä¸º1ï¼Œé«˜åˆ™ä¸º0.866
         float sidePointCount = resolution + 3;
         float oneHeight = 0.866f / sidePointCount;
         float oneWidth = 1.0f / sidePointCount;
@@ -325,6 +320,7 @@ public partial class TileSystem : SystemBase
     {
         calVexRet = new Vector3[oneMeshVerticesCount];
         willHide = new NativeList<Entity>(16, Allocator.Persistent);
+        leafs = new NativeList<Entity>(00, Allocator.Persistent);
     }
 
     void InitComputeShader()
@@ -337,14 +333,14 @@ public partial class TileSystem : SystemBase
         triangleMapBuffer.SetData(triangleMap.ToArray());
         Sphere.computeVertexShader.SetBuffer(kernelHandle, "TriangleMap", triangleMapBuffer);
         Sphere.computeVertexShader.SetFloat("Radius", Sphere.radius);
-        Sphere.computeVertexShader.SetInt("Resolution", 204); //35 »òÕß204
+        Sphere.computeVertexShader.SetInt("Resolution", 204); //35 æˆ–è€…204
         Sphere.computeVertexShader.SetInt("seed", 12345);
     }
 
     [BurstCompile]
-    static int GetLevel(float dist,int maxLevel)
+    static int GetLevel(float dist, int maxLevel)
     {
-        //¾àÀë<1µÄÊ±ºòMathf.Log(temp, 2)ÊÇ¸ºÊı£¬ÕâÀï±ÜÃâÈ¥½øĞĞÕâÀà¼ÆËã
+        //è·ç¦»<1çš„æ—¶å€™Mathf.Log(temp, 2)æ˜¯è´Ÿæ•°ï¼Œè¿™é‡Œé¿å…å»è¿›è¡Œè¿™ç±»è®¡ç®—
         if (dist < levelDist) return maxLevel;
 
         float temp = dist / levelDist;
@@ -386,7 +382,8 @@ public partial class TileSystem : SystemBase
         CreateTileChild(parent, parentTile, originalVertices);
 
         parentTile.isLeaf = false;
-        parentTile.op = TileOperation.non;
+        RemoveLeaf(parent);
+        parentTile.canMerge = false;
         entityMgr.SetComponentData<Tile>(parent, parentTile);
         willHide.Add(parent);
     }
@@ -402,7 +399,7 @@ public partial class TileSystem : SystemBase
         DynamicBuffer<Child> children = entityMgr.GetBuffer<Child>(parentEntity);
         if (children.Length < 4)
         {
-            Debug.LogError("Merge:È±ÉÙº¢×Ó½Úµã");
+            Debug.LogError("Merge:ç¼ºå°‘å­©å­èŠ‚ç‚¹");
             return false;
         }
 
@@ -416,10 +413,10 @@ public partial class TileSystem : SystemBase
         Tile tileLeft = entityMgr.GetComponentData<Tile>(child3);
         Tile tileRight = entityMgr.GetComponentData<Tile>(child4);
 
-        if (tileTop.op == TileOperation.merge &&
-            tileMid.op == TileOperation.merge &&
-            tileLeft.op == TileOperation.merge &&
-            tileRight.op == TileOperation.merge)
+        if (tileTop.canMerge &&
+            tileMid.canMerge &&
+            tileLeft.canMerge &&
+            tileRight.canMerge)
         {
             WorldRenderBounds renderBounds = entityMgr.GetComponentData<WorldRenderBounds>(parentEntity);
             float dist = Vector3.Distance(Vector3.zero, renderBounds.Value.ToBounds().ClosestPoint(Vector3.zero));
@@ -431,13 +428,38 @@ public partial class TileSystem : SystemBase
             }
 
             SetMeshVisibale(parentEntity, true);
-            if (entityMgr.Exists(child1)) entityMgr.DestroyEntity(child1);
-            if (entityMgr.Exists(child2)) entityMgr.DestroyEntity(child2);
-            if (entityMgr.Exists(child3)) entityMgr.DestroyEntity(child3);
-            if (entityMgr.Exists(child4)) entityMgr.DestroyEntity(child4);
+            if (entityMgr.Exists(child1))
+            {
+                RenderMesh renderMesh = entityMgr.GetSharedComponentData<RenderMesh>(child1);
+                meshPool.Release(renderMesh.mesh);
+                RemoveLeaf(child1);
+                entityMgr.DestroyEntity(child1);
+            }
+            if (entityMgr.Exists(child2))
+            {
+                RenderMesh renderMesh = entityMgr.GetSharedComponentData<RenderMesh>(child2);
+                meshPool.Release(renderMesh.mesh);
+                RemoveLeaf(child2);
+                entityMgr.DestroyEntity(child2);
+            }
+            if (entityMgr.Exists(child3))
+            {
+                RenderMesh renderMesh = entityMgr.GetSharedComponentData<RenderMesh>(child3);
+                meshPool.Release(renderMesh.mesh);
+                RemoveLeaf(child3);
+                entityMgr.DestroyEntity(child3);
+            }
+            if (entityMgr.Exists(child4))
+            {
+                RenderMesh renderMesh = entityMgr.GetSharedComponentData<RenderMesh>(child4);
+                meshPool.Release(renderMesh.mesh);
+                RemoveLeaf(child4);
+                entityMgr.DestroyEntity(child4);
+            }
 
-            parentTile.op = TileOperation.non;
+            parentTile.canMerge = false;
             parentTile.isLeaf = true;
+            leafs.Add(parentEntity);
             entityMgr.RemoveComponent<Child>(parentEntity);
             entityMgr.SetComponentData<Tile>(parentEntity, parentTile);
             return true;
@@ -452,7 +474,7 @@ public partial class TileSystem : SystemBase
         entityMgr.AddComponent<Tile>(newEntity);
         Tile tile = new Tile
         {
-            op = TileOperation.non,
+            canMerge = false,
             level = parentTile.level + 1,
             triangleVertexs = originalVertices,
             isLeaf = true,
@@ -469,7 +491,7 @@ public partial class TileSystem : SystemBase
         Child childCom = new Child();
         childCom.Value = newEntity;
         childs.Add(childCom);
-
+        leafs.Add(newEntity);
         CreateTileMesh(newEntity, tile, originalVertices);
     }
 
@@ -479,7 +501,7 @@ public partial class TileSystem : SystemBase
         RenderMesh renderMesh = entityMgr.GetSharedComponentData<RenderMesh>(entity);
         RenderBounds renderBounds = entityMgr.GetComponentData<RenderBounds>(entity);
 
-        Mesh mesh = new Mesh();
+        Mesh mesh = meshPool.Get();
         mesh.Clear();
         mesh.name = "Tile";
         mesh.vertices = SubdivideTriangles(originalVertices, tile.isSea);
@@ -489,7 +511,7 @@ public partial class TileSystem : SystemBase
         mesh.RecalculateNormals();
         //mesh.RecalculateTangents();
         renderMesh.mesh = mesh;
-        renderMesh.material = tile.isSea?Sphere.seaMt:Sphere.tileMt;
+        renderMesh.material = tile.isSea ? Sphere.seaMt : Sphere.tileMt;
         renderMesh.layerMask = 1;
 
         renderBounds.Value.Center = mesh.bounds.center;
@@ -499,15 +521,30 @@ public partial class TileSystem : SystemBase
         entityMgr.SetComponentData<RenderBounds>(entity, renderBounds);
     }
 
-    void SetMeshVisibale(Entity entity,bool show)
+    void SetMeshVisibale(Entity entity, bool show)
     {
         if (!entityMgr.HasComponent<RenderMesh>(entity))
         {
-            Debug.LogError("SetMeshVisibale:¸ÃÊµÌåÎŞRenderMesh×é¼ş");
+            Debug.LogError("SetMeshVisibale:è¯¥å®ä½“æ— RenderMeshç»„ä»¶");
             return;
         }
         RenderMesh renderMesh = entityMgr.GetSharedComponentData<RenderMesh>(entity);
-        renderMesh.layerMask = (uint)(show ?1:0);
+        renderMesh.layerMask = (uint)(show ? 1 : 0);
         entityMgr.SetSharedComponentData<RenderMesh>(entity, renderMesh);
+    }
+
+    bool RemoveLeaf(Entity entity)
+    {
+        int index = leafs.IndexOf(entity);
+        if (leafs.IndexOf(entity) != -1)
+        {
+            leafs.RemoveAtSwapBack(index);
+            return true;
+        }
+        else
+        {
+            Debug.LogError("ç§»é™¤å¤±è´¥ï¼");
+            return false;
+        }
     }
 }

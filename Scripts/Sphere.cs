@@ -90,6 +90,7 @@ public class Sphere
         ComponentType[] componentTypes = new ComponentType[]
         {
             ComponentType.ReadWrite<WorldRenderBounds>(),//加这个为了能够让TileSystem运行更新
+            ComponentType.ReadWrite<Vertices>(),
             ComponentType.ReadWrite<Tile>()
         };
         tileLeafTypes = entityManager.CreateArchetype(componentTypes);
@@ -116,7 +117,7 @@ public class Sphere
             entityManager.SetName(entity, "Tile");
             entityManager.SetComponentData<Tile>(entity, new Tile
             {
-                op = TileOperation.non,
+                canMerge = false,
                 triangleVertexs = triangleVertexs,
                 isSea = false,
                 isLeaf = true,
@@ -126,7 +127,7 @@ public class Sphere
             entity = entityManager.CreateEntity(tileLeafTypes);
             entityManager.SetComponentData<Tile>(entity, new Tile
             {
-                op = TileOperation.non,
+                canMerge = false,
                 triangleVertexs = triangleVertexs,
                 isSea = true,
                 isLeaf = true,

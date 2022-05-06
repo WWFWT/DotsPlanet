@@ -27,6 +27,10 @@ public class AtmosphereFeatrue : ScriptableRendererFeature
             this.renderPassEvent = RenderPassEvent.AfterRenderingTransparents;
             m_temporaryColorTexture.Init("temporaryColorTexture");
             light = GameObject.Find("Directional Light");
+            if(light == null)
+            {
+                Debug.LogError("找不到光源");
+            }
             SetMt();
         }
 
