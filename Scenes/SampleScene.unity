@@ -37,7 +37,7 @@ RenderSettings:
   m_ReflectionBounces: 1
   m_ReflectionIntensity: 1
   m_CustomReflection: {fileID: 0}
-  m_Sun: {fileID: 705507994}
+  m_Sun: {fileID: 0}
   m_IndirectSpecularColor: {r: 0, g: 0, b: 0, a: 1}
   m_UseRadianceAmbientProbe: 0
 --- !u!157 &3
@@ -154,10 +154,11 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   player: {fileID: 963194228}
-  material: {fileID: 2100000, guid: df17f5cc1eb97e74e99bbaa14964e2d4, type: 2}
+  tileMt: {fileID: 2100000, guid: df17f5cc1eb97e74e99bbaa14964e2d4, type: 2}
   seaMt: {fileID: 2100000, guid: 5f554717a95a1ca4ba12b3958a7b9fe9, type: 2}
   computeShader: {fileID: 7200000, guid: b32eb620c7e18ae4dafa4a031243a633, type: 3}
   tilePrefab: {fileID: 2501276829737348911, guid: 7f2eaba15235f5e4db366c66c48e74e6, type: 3}
+  sun: {fileID: 705507993}
 --- !u!114 &385834843
 MonoBehaviour:
   m_ObjectHideFlags: 0

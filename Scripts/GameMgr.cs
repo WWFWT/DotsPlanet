@@ -6,10 +6,11 @@ using UnityEngine;
 public class GameMgr : MonoBehaviour
 {
     public Transform player;
-    public Material material;
+    public Material tileMt;
     public Material seaMt;
     public ComputeShader computeShader;
     public GameObject tilePrefab;
+    public GameObject sun;
 
     Sphere sphere;
 
@@ -18,7 +19,7 @@ public class GameMgr : MonoBehaviour
     {
         sphere = new Sphere();
         Sphere.radius = 6371*1000;
-        Sphere.tileMt = material;
+        Sphere.tileMt = tileMt;
         Sphere.seaMt = seaMt;
         Sphere.computeVertexShader = computeShader;
         Sphere.player = player;
@@ -37,5 +38,6 @@ public class GameMgr : MonoBehaviour
     void Update()
     {
         sphere.Update();
+        Sphere.tileMt.SetVector("SunLightDir", sun.transform.forward);
     }
 }

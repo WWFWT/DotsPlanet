@@ -65,7 +65,7 @@ Shader "MyShader/AtmoUseDepthLUT"
 			HLSLPROGRAM
 			#pragma vertex vert
 			#pragma fragment frag
-			#pragma enable_d3d11_debug_symbols
+			//#pragma enable_d3d11_debug_symbols
 
 			struct appdata
 			{
