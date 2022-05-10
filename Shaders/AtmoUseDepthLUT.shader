@@ -17,7 +17,6 @@ Shader "MyShader/AtmoUseDepthLUT"
 		HLSLINCLUDE
 		#include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
 		#include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/DeclareDepthTexture.hlsl"
-		#define PI 3.14159265359
 		static const float maxFloat = 3.402823466e+38;
 
 		CBUFFER_START(UnityPerMaterial)
@@ -48,13 +47,15 @@ Shader "MyShader/AtmoUseDepthLUT"
 		float _RScatteringIntensity;
 		float _MScatteringIntensity;
 
-		CBUFFER_END
-
 		TEXTURE2D(_MainTex);
 		SAMPLER(sampler_MainTex);
 
 		TEXTURE2D(_AtmoDepthLUT);
 		SAMPLER(sampler_AtmoDepthLUT);
+
+		CBUFFER_END
+
+		
 
 		ENDHLSL
 
@@ -147,7 +148,7 @@ Shader "MyShader/AtmoUseDepthLUT"
 					//太阳光看作平行光 这里计算方法是光源位置就是点P 向着太阳光方向
 					//太远光穿进大气层的距离
 					float sunRayLength = RaySphere(_PlanetCenter,_AtmoRadius,pos,_DirToSun).y;
-
+					
 					if (sunRayLength > 640000) {
 						pos += step;
 						continue;

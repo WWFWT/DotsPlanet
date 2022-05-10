@@ -7,6 +7,7 @@ using Unity.Collections;
 using System.Collections.Generic;
 using Unity.Mathematics;
 using UnityEngine.Rendering;
+using System.Threading;
 
 public enum TrianglePos
 {
@@ -334,7 +335,8 @@ public partial class TileSystem : SystemBase
         Sphere.computeVertexShader.SetBuffer(kernelHandle, "TriangleMap", triangleMapBuffer);
         Sphere.computeVertexShader.SetFloat("Radius", Sphere.radius);
         Sphere.computeVertexShader.SetInt("Resolution", 204); //35 或者204
-        Sphere.computeVertexShader.SetInt("seed", 12345);
+        int seed = UnityEngine.Random.Range(short.MinValue, short.MaxValue);
+        Sphere.computeVertexShader.SetInt("seed", seed);
     }
 
     [BurstCompile]
@@ -487,10 +489,11 @@ public partial class TileSystem : SystemBase
         parentCom.Value = parent;
         entityMgr.SetComponentData<Parent>(newEntity, parentCom);
 
-        DynamicBuffer<Child> childs = entityMgr.GetBuffer<Child>(parent);
-        Child childCom = new Child();
-        childCom.Value = newEntity;
-        childs.Add(childCom);
+        //指定父节点时候会自动加入父节点的子列表
+        //DynamicBuffer<Child> childs = entityMgr.GetBuffer<Child>(parent);
+        //Child childCom = new Child();
+        //childCom.Value = newEntity;
+        //childs.Add(childCom);
         leafs.Add(newEntity);
         CreateTileMesh(newEntity, tile, originalVertices);
     }

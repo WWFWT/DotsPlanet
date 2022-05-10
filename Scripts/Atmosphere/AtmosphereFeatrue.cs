@@ -30,6 +30,7 @@ public class AtmosphereFeatrue : ScriptableRendererFeature
             if(light == null)
             {
                 Debug.LogError("找不到光源");
+                return;
             }
             SetMt();
         }
