@@ -74,6 +74,7 @@ public partial class TileSystem : SystemBase
     float timer = 0f;
     public static GameObject tileGameObjectPrefab;
     public static List<Mesh> updateMesh;
+    static int[] optimozeIndex = null;
 
     Entity tilePrefab = Entity.Null;
     EntityManager entityMgr;
@@ -506,14 +507,25 @@ public partial class TileSystem : SystemBase
         mesh.Clear();
         mesh.name = "Tile";
         mesh.vertices = SubdivideTriangles(originalVertices, tile.isSea);
-        mesh.triangles = triangleIndexs;
+
+        if (optimozeIndex == null)
+        {
+            mesh.triangles = triangleIndexs;
+            mesh.OptimizeIndexBuffers();
+            optimozeIndex = mesh.triangles;
+        }
+        else
+        {
+            mesh.triangles = optimozeIndex;
+        }
+
         mesh.uv = uv;
         //mesh.RecalculateBounds();
         mesh.RecalculateNormals();
         //mesh.RecalculateTangents();
         //mesh.Optimize();
 
-        updateMesh.Add(mesh);
+        //updateMesh.Add(mesh);
 
         renderMesh.mesh = mesh;
         renderMesh.material = tile.isSea ? Sphere.seaMt : Sphere.tileMt;
