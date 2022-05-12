@@ -86,4 +86,6 @@ Material:
     - Color_345aa3b67c614ee59d504934a2efbd8c: {r: 0.7264151, g: 0.6239149, b: 0.3323692, a: 0}
     - Color_3ef91de4a02c47ae90f0d1d07b6e567d: {r: 0.2075472, g: 0.2075472, b: 0.2075472, a: 0}
     - Color_7d67d4fe86a54af98edd45c008c958cb: {r: 0.9245283, g: 0.8678355, b: 0.8678355, a: 0}
+    - SunLightDir: {r: -0.3213938, g: -0.76604444, b: 0.5566705, a: 0}
+    - Vector3_1e2957ced205419781da9e2f41bef84d: {r: 0, g: 0, b: 0, a: 0}
   m_BuildTextureStacks: []

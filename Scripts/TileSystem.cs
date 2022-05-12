@@ -8,6 +8,7 @@ using System.Collections.Generic;
 using Unity.Mathematics;
 using UnityEngine.Rendering;
 using System.Threading;
+using System.Threading.Tasks;
 
 public enum TrianglePos
 {
@@ -72,6 +73,7 @@ public partial class TileSystem : SystemBase
     const float updateTime = 0.1f;
     float timer = 0f;
     public static GameObject tileGameObjectPrefab;
+    public static List<Mesh> updateMesh;
 
     Entity tilePrefab = Entity.Null;
     EntityManager entityMgr;
@@ -155,7 +157,6 @@ public partial class TileSystem : SystemBase
             SetMeshVisibale(entity, false);
         }
         willHide.Clear();
-
 
         Job.WithCode(() =>
         {
@@ -322,6 +323,7 @@ public partial class TileSystem : SystemBase
         calVexRet = new Vector3[oneMeshVerticesCount];
         willHide = new NativeList<Entity>(16, Allocator.Persistent);
         leafs = new NativeList<Entity>(00, Allocator.Persistent);
+        updateMesh = new List<Mesh>(50);
     }
 
     void InitComputeShader()
@@ -336,7 +338,7 @@ public partial class TileSystem : SystemBase
         Sphere.computeVertexShader.SetFloat("Radius", Sphere.radius);
         Sphere.computeVertexShader.SetInt("Resolution", 204); //35 或者204
         int seed = UnityEngine.Random.Range(short.MinValue, short.MaxValue);
-        Sphere.computeVertexShader.SetInt("seed", seed);
+        Sphere.computeVertexShader.SetInt("seed", 132);
     }
 
     [BurstCompile]
@@ -489,11 +491,6 @@ public partial class TileSystem : SystemBase
         parentCom.Value = parent;
         entityMgr.SetComponentData<Parent>(newEntity, parentCom);
 
-        //指定父节点时候会自动加入父节点的子列表
-        //DynamicBuffer<Child> childs = entityMgr.GetBuffer<Child>(parent);
-        //Child childCom = new Child();
-        //childCom.Value = newEntity;
-        //childs.Add(childCom);
         leafs.Add(newEntity);
         CreateTileMesh(newEntity, tile, originalVertices);
     }
@@ -505,6 +502,7 @@ public partial class TileSystem : SystemBase
         RenderBounds renderBounds = entityMgr.GetComponentData<RenderBounds>(entity);
 
         Mesh mesh = meshPool.Get();
+        mesh.MarkDynamic();
         mesh.Clear();
         mesh.name = "Tile";
         mesh.vertices = SubdivideTriangles(originalVertices, tile.isSea);
@@ -513,6 +511,10 @@ public partial class TileSystem : SystemBase
         //mesh.RecalculateBounds();
         mesh.RecalculateNormals();
         //mesh.RecalculateTangents();
+        //mesh.Optimize();
+
+        updateMesh.Add(mesh);
+
         renderMesh.mesh = mesh;
         renderMesh.material = tile.isSea ? Sphere.seaMt : Sphere.tileMt;
         renderMesh.layerMask = 1;
