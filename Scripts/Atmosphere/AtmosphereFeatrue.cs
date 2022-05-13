@@ -83,7 +83,7 @@ public class AtmosphereFeatrue : ScriptableRendererFeature
             if (!atmosphereVolume.IsActive()) return;
             SetMt();
             CommandBuffer cmd = CommandBufferPool.Get(renderTag);
-            cmd.SetGlobalTexture(MainTexId, currentTarget);
+            //cmd.SetGlobalTexture(MainTexId, currentTarget);
             cmd.GetTemporaryRT(m_temporaryColorTexture.id, renderingData.cameraData.camera.scaledPixelWidth, renderingData.cameraData.camera.scaledPixelHeight, 0, FilterMode.Point, RenderTextureFormat.Default);
             cmd.Blit(currentTarget, m_temporaryColorTexture.Identifier());
             cmd.Blit(m_temporaryColorTexture.Identifier(), currentTarget, mt, 0);

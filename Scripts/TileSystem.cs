@@ -7,7 +7,6 @@ using Unity.Collections;
 using System.Collections.Generic;
 using Unity.Mathematics;
 using UnityEngine.Rendering;
-using System.Threading;
 using System.Threading.Tasks;
 
 public enum TrianglePos
@@ -75,6 +74,7 @@ public partial class TileSystem : SystemBase
     public static GameObject tileGameObjectPrefab;
     public static List<Mesh> updateMesh;
     static int[] optimozeIndex = null;
+    const int treeRootDensity = 30;//一块Tile上的最大根数量
 
     Entity tilePrefab = Entity.Null;
     EntityManager entityMgr;
@@ -87,7 +87,7 @@ public partial class TileSystem : SystemBase
     NativeArray<Vector3> vertices; //细分三角形时候存储三角形的顶点
     NativeList<Entity> willHide;
     Vector3[] calVexRet;
-    NativeList<Entity> leafs;
+    public static NativeList<Entity> leafs;
 
     //避免细分次数一样的三角形重复计算
     static int[] triangleIndexs;
@@ -506,8 +506,9 @@ public partial class TileSystem : SystemBase
         mesh.MarkDynamic();
         mesh.Clear();
         mesh.name = "Tile";
-        mesh.vertices = SubdivideTriangles(originalVertices, tile.isSea);
-
+        SubdivideTriangles(originalVertices, tile.isSea);
+        mesh.vertices = calVexRet;
+        mesh.uv = uv; 
         if (optimozeIndex == null)
         {
             mesh.triangles = triangleIndexs;
@@ -519,13 +520,9 @@ public partial class TileSystem : SystemBase
             mesh.triangles = optimozeIndex;
         }
 
-        mesh.uv = uv;
         //mesh.RecalculateBounds();
         mesh.RecalculateNormals();
         //mesh.RecalculateTangents();
-        //mesh.Optimize();
-
-        //updateMesh.Add(mesh);
 
         renderMesh.mesh = mesh;
         renderMesh.material = tile.isSea ? Sphere.seaMt : Sphere.tileMt;
@@ -536,6 +533,18 @@ public partial class TileSystem : SystemBase
 
         entityMgr.SetSharedComponentData<RenderMesh>(entity, renderMesh);
         entityMgr.SetComponentData<RenderBounds>(entity, renderBounds);
+
+        if (!tile.isSea && maxLevel - tile.level < 3)
+        {
+            Vector3[] vertices = mesh.vertices;
+            Vector3[] normals = mesh.normals;
+            Vector3 center = mesh.bounds.center;
+            entityMgr.AddBuffer<Vertices>(entity);
+            Task.Factory.StartNew(() =>
+            {
+                CreateTreeRoot(entity, center, vertices, normals);
+            });
+        }
     }
 
     void SetMeshVisibale(Entity entity, bool show)
@@ -563,5 +572,38 @@ public partial class TileSystem : SystemBase
             Debug.LogError("移除失败！");
             return false;
         }
+    }
+
+    void CreateTreeRoot(Entity entity,Vector3 center,Vector3[] vertices,Vector3[] normals)
+    {
+        NativeList<Vertices> roots = new NativeList<Vertices>(treeRootDensity, Allocator.Persistent);
+        NativeList<int> indexList = new NativeList<int>(treeRootDensity, Allocator.Persistent);
+        try
+        {
+            int seed = (int)(center.x + center.y * 2 + center.z * 3);
+            System.Random rand = new System.Random(seed);
+
+            for (int i = 0; i < treeRootDensity; i++)
+            {
+                int index = rand.Next(0, oneMeshVerticesCount);
+                if (indexList.Contains(index)) continue;
+                indexList.Add(index);
+
+                Vector3 vector3 = vertices[index];
+                Vector3 normal = normals[index];
+                float temp = Vector3.Dot((vector3 - Sphere.pos).normalized, normal.normalized) * -6.25f + 5.38f;
+                if (temp < 0.8f) roots.Add(vector3);
+            }
+
+            //TODO:当entity销毁时可能会导致verticesBuf访问异常
+            DynamicBuffer<Vertices> verticesBuf = entityMgr.GetBuffer<Vertices>(entity);
+            if(verticesBuf.IsCreated) verticesBuf.CopyFrom(roots);
+        }
+        catch(System.Exception e)
+        {
+            Debug.LogException(e);
+        }
+        roots.Dispose();
+        indexList.Dispose();
     }
 }
