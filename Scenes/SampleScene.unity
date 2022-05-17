@@ -25,8 +25,8 @@ RenderSettings:
   m_AmbientGroundColor: {r: 0.047, g: 0.043, b: 0.035, a: 1}
   m_AmbientIntensity: 1
   m_AmbientMode: 3
-  m_SubtractiveShadowColor: {r: 0.42, g: 0.478, b: 0.627, a: 1}
-  m_SkyboxMaterial: {fileID: 0}
+  m_SubtractiveShadowColor: {r: 0.254984, g: 0.26291838, b: 0.2830189, a: 1}
+  m_SkyboxMaterial: {fileID: 2100000, guid: f54dba713f6c7374aa1016458fb80a47, type: 2}
   m_HaloStrength: 0.5
   m_FlareStrength: 1
   m_FlareFadeSpeed: 3
@@ -34,11 +34,11 @@ RenderSettings:
   m_SpotCookie: {fileID: 10001, guid: 0000000000000000e000000000000000, type: 0}
   m_DefaultReflectionMode: 0
   m_DefaultReflectionResolution: 128
-  m_ReflectionBounces: 1
+  m_ReflectionBounces: 2
   m_ReflectionIntensity: 1
   m_CustomReflection: {fileID: 0}
-  m_Sun: {fileID: 0}
-  m_IndirectSpecularColor: {r: 0, g: 0, b: 0, a: 1}
+  m_Sun: {fileID: 705507994}
+  m_IndirectSpecularColor: {r: 0.0004337459, g: 0.00041812594, b: 0.0003804768, a: 1}
   m_UseRadianceAmbientProbe: 0
 --- !u!157 &3
 LightmapSettings:
@@ -158,7 +158,10 @@ MonoBehaviour:
   seaMt: {fileID: 2100000, guid: 5f554717a95a1ca4ba12b3958a7b9fe9, type: 2}
   computeShader: {fileID: 7200000, guid: b32eb620c7e18ae4dafa4a031243a633, type: 3}
   tilePrefab: {fileID: 2501276829737348911, guid: 7f2eaba15235f5e4db366c66c48e74e6, type: 3}
+  treePrefab: {fileID: 3568016590042371399, guid: 19861694a76660245b4801c9c67f82c9, type: 3}
   sun: {fileID: 705507993}
+  test: 0
+  testMesh: {fileID: 0}
 --- !u!114 &385834843
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -386,7 +389,7 @@ MonoBehaviour:
   m_RequiresOpaqueTextureOption: 2
   m_CameraType: 0
   m_Cameras: []
-  m_RendererIndex: 0
+  m_RendererIndex: -1
   m_VolumeLayerMask:
     serializedVersion: 2
     m_Bits: 1
@@ -427,5 +430,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: a18d9122ce081e54d80a158e70f0473f, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  mesh: {fileID: 10208, guid: 0000000000000000e000000000000000, type: 0}
-  material: {fileID: 2100000, guid: 31321ba15b8f8eb4c954353edc038b1d, type: 2}
+  mesh: {fileID: 4300000, guid: 6c7eaede4efc960409fb9ef2dfb77f29, type: 3}
+  material: {fileID: 2100000, guid: 93caadf4359ae8143aad35b3145d31af, type: 2}
+  pos: {x: 0, y: 0, z: 30}

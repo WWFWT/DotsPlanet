@@ -6,43 +6,19 @@ using Unity.Entities;
 using Unity.Jobs;
 using Unity.Rendering;
 using UnityEngine;
-
-//TODO有大问题
-struct GetRoot : IJobParallelFor
-{
-    [ReadOnly]
-    public NativeArray<Entity> leafs;
-    [ReadOnly]
-    public int maxCount;
-    public NativeArray<Vector3> root;
-
-    public void Execute(int index)
-    {
-        Mesh mesh = GameMgr.entityMgr.GetSharedComponentData<RenderMesh>(leafs[index]).mesh;
-        RenderBounds bounds = GameMgr.entityMgr.GetComponentData<RenderBounds>(leafs[index]);
-        int seed = (int)(bounds.Value.Center.x * 1 + bounds.Value.Center.y * 2 + bounds.Value.Center.z * 3) / 3;
-        System.Random rand = new System.Random(seed);
-
-        int iterationCount = maxCount / leafs.Length;
-        for(int i = 0; i < iterationCount; i++)
-        {
-            int randomNum = rand.Next(mesh.vertexCount);
-            Vector3 vector3 = mesh.vertices[randomNum];
-            Vector3 normal = mesh.normals[randomNum];
-            float temp = Vector3.Dot(vector3, normal) * -6.25f + 5.38f;
-            int rootIndex = index * iterationCount + i;
-            root[rootIndex] = temp < 0.8f ? vector3 : Vector3.zero;
-        }
-    }
-}
+using Unity.Transforms;
 
 [BurstCompile]
 [DisableAutoCreation]
+[AlwaysUpdateSystem]
 public partial class TreeSystem : SystemBase
 {
     const int maxTreeCount = 3000;
-    public static GameObject[] treePrefabs;
+    EntityCommandBufferSystem CommandBufferSystem;
+    public static List<GameObject> treePrefabs = new List<GameObject>();
     static NativeArray<Entity> prefabs;
+    const float updateTime = 0.5f;
+    float timer = 0;
 
     EntityManager entityMgr;
 
@@ -50,35 +26,76 @@ public partial class TreeSystem : SystemBase
     {
         base.OnCreate();
         entityMgr = World.DefaultGameObjectInjectionWorld.EntityManager;
+        CommandBufferSystem = World.DefaultGameObjectInjectionWorld.GetExistingSystem<EndSimulationEntityCommandBufferSystem>();
     }
 
     protected override void OnStartRunning()
     {
         base.OnStartRunning();
-        var tempParam = new BlobAssetStore();
-        NativeList<Entity> tempList = new NativeList<Entity>(Allocator.Temp);
-        foreach(var prefab in treePrefabs)
+        if (!prefabs.IsCreated)
         {
-            var setting = GameObjectConversionSettings.FromWorld(World.DefaultGameObjectInjectionWorld, tempParam);
-            Entity treePrefab = GameObjectConversionUtility.ConvertGameObjectHierarchy(prefab, setting);
-            tempList.Add(treePrefab);
+            var tempParam = new BlobAssetStore();
+            NativeList<Entity> tempList = new NativeList<Entity>(Allocator.Temp);
+            int index = 0;
+            foreach (var prefab in treePrefabs)
+            {
+                var setting = GameObjectConversionSettings.FromWorld(World.DefaultGameObjectInjectionWorld, tempParam);
+                Entity treePrefab = GameObjectConversionUtility.ConvertGameObjectHierarchy(prefab, setting);
+                entityMgr.SetName(treePrefab, "Tree_" + index);
+                tempList.Add(treePrefab);
+            }
+            tempParam.Dispose();
+            prefabs = new NativeArray<Entity>(tempList.ToArray(), Allocator.Persistent);
+            tempList.Dispose();
         }
-        tempParam.Dispose();
-        prefabs = new NativeArray<Entity>(tempList.ToArray(), Allocator.Persistent);
     }
 
     protected override void OnUpdate()
     {
+        timer += Time.DeltaTime;
+        if (timer < updateTime) return;
+        timer = 0;
+
+        EntityCommandBuffer.ParallelWriter commandBuffer = CommandBufferSystem.CreateCommandBuffer().AsParallelWriter();
+        Entity tempTree = prefabs[0];
+        Entity parentEntity = Sphere.sphere;
+        Vector3 center = Sphere.pos;
+
         Entities
         .WithAny<Tile>()
-        .ForEach((in DynamicBuffer<Vertices> vertices) =>
+        .ForEach((Entity entity, ref DynamicBuffer<Vertices> vertices,in LocalToWorld localToWorld, in int entityInQueryIndex) =>
         {
+            for (int i = 0; i < vertices.Length; i++)
+            {
+                if (vertices[i] == Vector3.zero) continue;
+                Entity newEntity = commandBuffer.Instantiate(entityInQueryIndex, tempTree);
+                commandBuffer.AddComponent<LocalToParent>(entityInQueryIndex, newEntity);
 
-        }).Schedule();
+                Parent parent = new Parent();
+                parent.Value = parentEntity;
+                commandBuffer.AddComponent<Parent>(entityInQueryIndex, newEntity, parent);
+                commandBuffer.SetComponent<LocalToWorld>(entityInQueryIndex, newEntity, localToWorld);
+
+                Translation translation = new Translation();
+                translation.Value = vertices[i].vertex;
+                vertices[i] = Vector3.zero;
+                commandBuffer.SetComponent<Translation>(entityInQueryIndex, newEntity, translation);
+
+                Rotation rotation = new Rotation();
+                Vector3 targetDir = (center - vertices[i].vertex).normalized;
+                rotation.Value = Quaternion.FromToRotation(localToWorld.Up, -targetDir);
+                commandBuffer.SetComponent<Rotation>(entityInQueryIndex, newEntity, rotation);
+            }
+            commandBuffer.RemoveComponent<Vertices>(entityInQueryIndex, entity);
+        })
+        .ScheduleParallel();
+
+        CommandBufferSystem.AddJobHandleForProducer(this.Dependency);
     }
 
     protected override void OnDestroy()
     {
+        if(prefabs.IsCreated) prefabs.Dispose();
         base.OnDestroy();
     }
 }

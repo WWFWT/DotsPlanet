@@ -89,8 +89,6 @@ public class Sphere
         
         ComponentType[] componentTypes = new ComponentType[]
         {
-            ComponentType.ReadWrite<WorldRenderBounds>(),//加这个为了能够让TileSystem运行更新
-            ComponentType.ReadWrite<Vertices>(),
             ComponentType.ReadWrite<Tile>()
         };
         tileLeafTypes = entityManager.CreateArchetype(componentTypes);

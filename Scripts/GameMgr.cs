@@ -11,8 +11,10 @@ public class GameMgr : MonoBehaviour
     public Material seaMt;
     public ComputeShader computeShader;
     public GameObject tilePrefab;
+    public GameObject treePrefab;
     public GameObject sun;
     public int test;
+    public Mesh testMesh;
 
     public static EntityManager entityMgr;
 
@@ -33,7 +35,9 @@ public class GameMgr : MonoBehaviour
         Sphere.computeVertexShader = computeShader;
         Sphere.player = player;
         player.position = new Vector3(0, 0, -Sphere.radius * 1.5f);
+
         TileSystem.tileGameObjectPrefab = tilePrefab;
+        TreeSystem.treePrefabs.Add(treePrefab);
 
         entityMgr = World.DefaultGameObjectInjectionWorld.EntityManager;
         TileSystem tileSystem = World.DefaultGameObjectInjectionWorld.GetOrCreateSystem<TileSystem>();

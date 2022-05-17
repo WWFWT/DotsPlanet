@@ -62,6 +62,7 @@ public struct Vertices : IBufferElementData
 
 [BurstCompile]
 [DisableAutoCreation]
+[AlwaysUpdateSystem]
 public partial class TileSystem : SystemBase
 {
     const int resolution = 286;
@@ -74,7 +75,7 @@ public partial class TileSystem : SystemBase
     public static GameObject tileGameObjectPrefab;
     public static List<Mesh> updateMesh;
     static int[] optimozeIndex = null;
-    const int treeRootDensity = 30;//一块Tile上的最大根数量
+    const int treeRootDensity = 3000;//一块Tile上的最大根数量
 
     Entity tilePrefab = Entity.Null;
     EntityManager entityMgr;
@@ -93,6 +94,7 @@ public partial class TileSystem : SystemBase
     static int[] triangleIndexs;
     readonly static List<int> triangleMap = new List<int>();
     static Vector2[] uv;
+    static bool isInit = false;
 
     ObjectPool<Mesh> meshPool = new ObjectPool<Mesh>(null, null, false);
 
@@ -112,38 +114,42 @@ public partial class TileSystem : SystemBase
     protected override void OnStartRunning()
     {
         base.OnStartRunning();
-        var tempParam = new BlobAssetStore();
-        var setting = GameObjectConversionSettings.FromWorld(World.DefaultGameObjectInjectionWorld, tempParam);
-        tilePrefab = GameObjectConversionUtility.ConvertGameObjectHierarchy(tileGameObjectPrefab, setting);
-        tempParam.Dispose();
-        if (tilePrefab == Entity.Null)
+        if (!isInit)
         {
-            Debug.LogError("找不到TilePrefab  prefab:" + tileGameObjectPrefab + "   setting:" + setting);
-            return;
+            var tempParam = new BlobAssetStore();
+            var setting = GameObjectConversionSettings.FromWorld(World.DefaultGameObjectInjectionWorld, tempParam);
+            tilePrefab = GameObjectConversionUtility.ConvertGameObjectHierarchy(tileGameObjectPrefab, setting);
+            tempParam.Dispose();
+            if (tilePrefab == Entity.Null)
+            {
+                Debug.LogError("找不到TilePrefab  prefab:" + tileGameObjectPrefab + "   setting:" + setting);
+                return;
+            }
+            entityMgr.AddComponent<LocalToParent>(tilePrefab);
+            entityMgr.AddComponent<Parent>(tilePrefab);
+
+            EntityQuery entityQuery = entityMgr.CreateEntityQuery(new EntityQueryDesc { All = new ComponentType[] { ComponentType.ReadWrite<Tile>() } });
+            NativeArray<Entity> entities = entityQuery.ToEntityArray(Allocator.Temp);
+
+            for (int i = 0; i < entities.Length; i++)
+            {
+                Tile tile = entityMgr.GetComponentData<Tile>(entities[i]);
+                Entity entity = entityMgr.Instantiate(tilePrefab);
+                entityMgr.AddComponent<Tile>(entity);
+                entityMgr.SetComponentData(entity, tile);
+                entityMgr.SetName(entity, "Tile_0");
+
+                Parent parent = entityMgr.GetComponentData<Parent>(entity);
+                parent.Value = Sphere.sphere;
+                entityMgr.SetComponentData<Parent>(entity, parent);
+
+                CreateTileMesh(entity, tile, tile.triangleVertexs);
+                leafs.Add(entity);
+                entityMgr.DestroyEntity(entities[i]);
+            }
+            entities.Dispose();
+            isInit = true;
         }
-        entityMgr.AddComponent<LocalToParent>(tilePrefab);
-        entityMgr.AddComponent<Parent>(tilePrefab);
-
-        EntityQuery entityQuery = entityMgr.CreateEntityQuery(new EntityQueryDesc { All = new ComponentType[] { ComponentType.ReadWrite<Tile>() } });
-        NativeArray<Entity> entities = entityQuery.ToEntityArray(Allocator.Temp);
-
-        for (int i = 0; i < entities.Length; i++)
-        {
-            Tile tile = entityMgr.GetComponentData<Tile>(entities[i]);
-            Entity entity = entityMgr.Instantiate(tilePrefab);
-            entityMgr.AddComponent<Tile>(entity);
-            entityMgr.SetComponentData(entity, tile);
-            entityMgr.SetName(entity, "Tile_0");
-
-            Parent parent = entityMgr.GetComponentData<Parent>(entity);
-            parent.Value = Sphere.sphere;
-            entityMgr.SetComponentData<Parent>(entity, parent);
-
-            CreateTileMesh(entity, tile, tile.triangleVertexs);
-            leafs.Add(entity);
-            entityMgr.DestroyEntity(entities[i]);
-        }
-        entities.Dispose();
     }
 
     [BurstCompile]
@@ -407,7 +413,11 @@ public partial class TileSystem : SystemBase
             Debug.LogError("Merge:缺少孩子节点");
             return false;
         }
-
+        if (parentTile.isLeaf)
+        {
+            Debug.LogError("Merge:不能合并叶子节点");
+            return false;
+        }
         Entity child1 = children[0].Value;
         Entity child2 = children[1].Value;
         Entity child3 = children[2].Value;
@@ -433,6 +443,7 @@ public partial class TileSystem : SystemBase
             }
 
             SetMeshVisibale(parentEntity, true);
+
             if (entityMgr.Exists(child1))
             {
                 RenderMesh renderMesh = entityMgr.GetSharedComponentData<RenderMesh>(child1);
@@ -508,7 +519,7 @@ public partial class TileSystem : SystemBase
         mesh.name = "Tile";
         SubdivideTriangles(originalVertices, tile.isSea);
         mesh.vertices = calVexRet;
-        mesh.uv = uv; 
+        mesh.uv = uv;
         if (optimozeIndex == null)
         {
             mesh.triangles = triangleIndexs;
@@ -534,17 +545,17 @@ public partial class TileSystem : SystemBase
         entityMgr.SetSharedComponentData<RenderMesh>(entity, renderMesh);
         entityMgr.SetComponentData<RenderBounds>(entity, renderBounds);
 
-        if (!tile.isSea && maxLevel - tile.level < 3)
-        {
-            Vector3[] vertices = mesh.vertices;
-            Vector3[] normals = mesh.normals;
-            Vector3 center = mesh.bounds.center;
-            entityMgr.AddBuffer<Vertices>(entity);
-            Task.Factory.StartNew(() =>
-            {
-                CreateTreeRoot(entity, center, vertices, normals);
-            });
-        }
+        //if (!tile.isSea && maxLevel == tile.level)
+        //{
+        //    Vector3[] vertices = mesh.vertices;
+        //    Vector3[] normals = mesh.normals;
+        //    Vector3 center = mesh.bounds.center;
+        //    entityMgr.AddBuffer<Vertices>(entity);
+        //    Task.Factory.StartNew(() =>
+        //    {
+        //        CreateTreeRoot(entity, center, vertices, normals);
+        //    });
+        //}
     }
 
     void SetMeshVisibale(Entity entity, bool show)
@@ -585,25 +596,29 @@ public partial class TileSystem : SystemBase
 
             for (int i = 0; i < treeRootDensity; i++)
             {
-                int index = rand.Next(0, oneMeshVerticesCount);
+                int index = rand.Next(0, oneMeshVerticesCount - 1);
                 if (indexList.Contains(index)) continue;
                 indexList.Add(index);
 
+                //vector3为Object坐标系
                 Vector3 vector3 = vertices[index];
                 Vector3 normal = normals[index];
-                float temp = Vector3.Dot((vector3 - Sphere.pos).normalized, normal.normalized) * -6.25f + 5.38f;
-                if (temp < 0.8f) roots.Add(vector3);
+                float temp = Vector3.Dot(vector3.normalized, normal.normalized) * -6.25f + 5.38f;
+                if (temp < 0.5f && vector3.magnitude > Sphere.radius) roots.Add(vector3);
             }
 
             //TODO:当entity销毁时可能会导致verticesBuf访问异常
             DynamicBuffer<Vertices> verticesBuf = entityMgr.GetBuffer<Vertices>(entity);
             if(verticesBuf.IsCreated) verticesBuf.CopyFrom(roots);
+            roots.Dispose();
+            indexList.Dispose();
         }
         catch(System.Exception e)
         {
-            Debug.LogException(e);
+            roots.Dispose();
+            indexList.Dispose();
+            entityMgr.RemoveComponent<Vertices>(entity);
+            //Debug.LogException(e);
         }
-        roots.Dispose();
-        indexList.Dispose();
     }
 }
