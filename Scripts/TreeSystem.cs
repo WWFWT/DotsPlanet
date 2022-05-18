@@ -7,6 +7,7 @@ using Unity.Jobs;
 using Unity.Rendering;
 using UnityEngine;
 using Unity.Transforms;
+using UnityEngine.Rendering;
 
 [BurstCompile]
 [DisableAutoCreation]
@@ -19,6 +20,7 @@ public partial class TreeSystem : SystemBase
     static NativeArray<Entity> prefabs;
     const float updateTime = 0.5f;
     float timer = 0;
+    BatchRendererGroup batchRendererGroup;
 
     EntityManager entityMgr;
 
@@ -34,6 +36,8 @@ public partial class TreeSystem : SystemBase
         base.OnStartRunning();
         if (!prefabs.IsCreated)
         {
+            batchRendererGroup = new BatchRendererGroup(OnCulling);
+
             var tempParam = new BlobAssetStore();
             NativeList<Entity> tempList = new NativeList<Entity>(Allocator.Temp);
             int index = 0;
@@ -52,6 +56,7 @@ public partial class TreeSystem : SystemBase
 
     protected override void OnUpdate()
     {
+
         timer += Time.DeltaTime;
         if (timer < updateTime) return;
         timer = 0;
@@ -97,5 +102,10 @@ public partial class TreeSystem : SystemBase
     {
         if(prefabs.IsCreated) prefabs.Dispose();
         base.OnDestroy();
+    }
+
+    JobHandle OnCulling(BatchRendererGroup batchRendererGroup,BatchCullingContext batchCullingContext)
+    {
+        return default;
     }
 }

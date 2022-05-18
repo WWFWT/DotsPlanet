@@ -40,8 +40,9 @@ public class GameMgr : MonoBehaviour
         TreeSystem.treePrefabs.Add(treePrefab);
 
         entityMgr = World.DefaultGameObjectInjectionWorld.EntityManager;
-        TileSystem tileSystem = World.DefaultGameObjectInjectionWorld.GetOrCreateSystem<TileSystem>();
         ComponentSystemGroup componentSystemGroup = World.DefaultGameObjectInjectionWorld.GetExistingSystem<ComponentSystemGroup>();
+        
+        TileSystem tileSystem = World.DefaultGameObjectInjectionWorld.GetOrCreateSystem<TileSystem>();
         componentSystemGroup.AddSystemToUpdateList(tileSystem);
 
         //TreeSystem treeSystem = World.DefaultGameObjectInjectionWorld.GetOrCreateSystem<TreeSystem>();

@@ -61,8 +61,8 @@ public struct Vertices : IBufferElementData
 
 
 [BurstCompile]
-[DisableAutoCreation]
 [AlwaysUpdateSystem]
+[DisableAutoCreation]
 public partial class TileSystem : SystemBase
 {
     const int resolution = 286;

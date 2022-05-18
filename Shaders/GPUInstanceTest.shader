@@ -32,10 +32,7 @@ Shader "Unlit/GPUInstanceTest"
             float4 vertex : SV_POSITION;
         };
 
-        CBUFFER_START(UnityPerMaterial)
         float4 _MainTex_ST;
-        CBUFFER_END
-
         TEXTURE2D(_MainTex);
         SAMPLER(sampler_MainTex);
 
