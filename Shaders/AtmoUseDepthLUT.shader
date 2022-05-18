@@ -42,7 +42,7 @@ Shader "MyShader/AtmoUseDepthLUT"
 		float _AtmoRadius;
 
 		//米式散射相位函数g值
-		const float _MieG = 0.76f;
+		const float _MieG = 0.98f;
 
 		float _RScatteringIntensity;
 		float _MScatteringIntensity;
@@ -65,7 +65,7 @@ Shader "MyShader/AtmoUseDepthLUT"
 			HLSLPROGRAM
 			#pragma vertex vert
 			#pragma fragment frag
-			//#pragma enable_d3d11_debug_symbols
+			#pragma enable_d3d11_debug_symbols
 
 			struct appdata
 			{
@@ -118,11 +118,12 @@ Shader "MyShader/AtmoUseDepthLUT"
 			}
 
 			//米式散射的相位函数
-			float PhaseFunctionM(float cosAngle)
+			float PhaseFunctionM(float costh,bool isSun)
 			{
-				float g = _MieG;
-				float g2 = g * g;
-				return (1.0 / (4.0 * PI)) * ((3.0 * (1.0 - g2)) / (2.0 * (2.0 + g2))) * ((1 + cosAngle * cosAngle) / (pow((1 + g2 - 2 * g * cosAngle), 3.0 / 2.0)));
+				float g = isSun?0.9381:0.76;
+				float k = 1.55 * g - 0.55 * g * g * g;
+				float kcosth = k * costh;
+				return (1 - k * k) / ((4 * PI) * (1 - kcosth) * (1 - kcosth));
 			}
 
 			//计算一条视线上最终光的颜色 sceneDepth为像素到摄像机的距离
@@ -139,7 +140,8 @@ Shader "MyShader/AtmoUseDepthLUT"
 				//相位函数
 				float angle = dot(normalize(lookDir), normalize(_DirToSun));
 				float scatterR = PhaseFunctionR(angle);
-				float scatterM = PhaseFunctionM(angle);
+				float scatterM = PhaseFunctionM(angle,false);
+				float sunScatter = PhaseFunctionM(angle, true);
 				float maxHeight = _AtmoRadius - _PlanetRadius;
 
 				[loop]
@@ -260,8 +262,9 @@ Shader "MyShader/AtmoUseDepthLUT"
 
 				float3 result_R = _RayleighSct * scatterR * attenuation_R * _SunLight * _SunStrength;
 				float3 result_M = _MieSct * scatterM * attenuation_M * _SunLight * _SunStrength;
+				float3 result_Sun = _MieSct * sunScatter * attenuation_M * _SunLight * _SunStrength;
 
-				return result_R + result_M;
+				return result_M + result_R + result_Sun;
 			}
 
 			v2f vert(appdata v)
