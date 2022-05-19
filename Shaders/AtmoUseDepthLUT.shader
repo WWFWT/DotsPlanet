@@ -18,6 +18,8 @@ Shader "MyShader/AtmoUseDepthLUT"
 		#include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
 		#include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/DeclareDepthTexture.hlsl"
 		static const float maxFloat = 3.402823466e+38;
+		//米式散射相位函数g值
+		static const float _MieG = 0.76f;
 
 		CBUFFER_START(UnityPerMaterial)
 
@@ -41,9 +43,6 @@ Shader "MyShader/AtmoUseDepthLUT"
 		//大气层半径
 		float _AtmoRadius;
 
-		//米式散射相位函数g值
-		const float _MieG = 0.98f;
-
 		float _RScatteringIntensity;
 		float _MScatteringIntensity;
 
@@ -65,7 +64,7 @@ Shader "MyShader/AtmoUseDepthLUT"
 			HLSLPROGRAM
 			#pragma vertex vert
 			#pragma fragment frag
-			#pragma enable_d3d11_debug_symbols
+			//#pragma enable_d3d11_debug_symbols
 
 			struct appdata
 			{
@@ -120,14 +119,14 @@ Shader "MyShader/AtmoUseDepthLUT"
 			//米式散射的相位函数
 			float PhaseFunctionM(float costh,bool isSun)
 			{
-				float g = isSun?0.9381:0.76;
+				float g = isSun ? 0.9381 : _MieG;
 				float k = 1.55 * g - 0.55 * g * g * g;
 				float kcosth = k * costh;
 				return (1 - k * k) / ((4 * PI) * (1 - kcosth) * (1 - kcosth));
 			}
 
 			//计算一条视线上最终光的颜色 sceneDepth为像素到摄像机的距离
-			float3 CalculateLightColor(float3 eyeHitPos,float3 lookDir,float dstThroughAtmo,float inver)
+			float3 CalculateLightColor(float3 eyeHitPos,float3 lookDir,float dstThroughAtmo,float inver,float showSun, out float3 extinction)
 			{
 				float3 attenuation_R = 0;
 				float3 attenuation_M = 0;
@@ -141,7 +140,6 @@ Shader "MyShader/AtmoUseDepthLUT"
 				float angle = dot(normalize(lookDir), normalize(_DirToSun));
 				float scatterR = PhaseFunctionR(angle);
 				float scatterM = PhaseFunctionM(angle,false);
-				float sunScatter = PhaseFunctionM(angle, true);
 				float maxHeight = _AtmoRadius - _PlanetRadius;
 
 				[loop]
@@ -255,16 +253,25 @@ Shader "MyShader/AtmoUseDepthLUT"
 					//----------------------
 					float2 pDepth = AtmoDensityRatio(pHeight);
 
+					if (i == 0) {
+						extinction = exp(-(_RayleighSct * depth.x * _RScatteringIntensity + _MieSct * depth.y * _MScatteringIntensity));
+					}
+
 					attenuation_R += TAP_R.rgb * TCP_R.rgb * pDepth.x * stepSize;
 					attenuation_M += TAP_M.rgb * TCP_M.rgb * pDepth.y * stepSize;
 					pos += step;
 				}
 
-				float3 result_R = _RayleighSct * scatterR * attenuation_R * _SunLight * _SunStrength;
-				float3 result_M = _MieSct * scatterM * attenuation_M * _SunLight * _SunStrength;
-				float3 result_Sun = _MieSct * sunScatter * attenuation_M * _SunLight * _SunStrength;
+				float3 result_R = _RayleighSct * scatterR * attenuation_R;
+				float3 result_M = _MieSct * scatterM * attenuation_M;
 
-				return result_M + result_R + result_Sun;
+				if (showSun) {
+					float sunScatter = PhaseFunctionM(angle, true);
+					float3 result_Sun = _MieSct * sunScatter * attenuation_M;
+					return (result_M + result_R + result_Sun) * _SunLight * _SunStrength;
+				}
+
+				return (result_R) * _SunLight * _SunStrength;
 			}
 
 			v2f vert(appdata v)
@@ -303,7 +310,13 @@ Shader "MyShader/AtmoUseDepthLUT"
 
 				float2 hitInfo = RaySphere(_PlanetCenter, _AtmoRadius, rayStart, rayDir);
 				float dstToAtmo = hitInfo.x;
-				float dstThroughAtmo = min(hitInfo.y, sceneDepth - dstToAtmo);
+				float dstThroughAtmo = sceneDepth - dstToAtmo;
+				bool showSun = false;
+				if (hitInfo.y < dstThroughAtmo)
+				{
+					dstThroughAtmo = hitInfo.y;
+					showSun = true;
+				}
 
 				if (dstThroughAtmo > 0)
 				{
@@ -321,9 +334,10 @@ Shader "MyShader/AtmoUseDepthLUT"
 						dotVal *= 100;
 						inver = (dotVal + 1.0) / 2.0;
 					}
-					float3 atmoCol = CalculateLightColor(eyeHitPos, rayDir, dstThroughAtmo, inver);
+					float3 extinction = 0;
+					float3 atmoCol = CalculateLightColor(eyeHitPos, rayDir, dstThroughAtmo, inver, showSun, extinction);
 
-					return float4(atmoCol,1) + originalCol;
+					return float4(atmoCol,1) + originalCol * float4(extinction,1);
 				}
 				else 
 				{
