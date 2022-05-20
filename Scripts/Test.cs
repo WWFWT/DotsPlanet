@@ -13,7 +13,8 @@ struct AddJob : IJobParallelFor
     public NativeArray<Matrix4x4> matrixes;
     public void Execute(int index)
     {
-        Matrix4x4 offset = Matrix4x4.Translate(new Vector3(index, 0, 0));
+        System.Random random = new System.Random(index);
+        Matrix4x4 offset = Matrix4x4.Translate(new Vector3(random.Next(-50,50), 0, random.Next(-50, 50)));
         matrixes[index] = offset;
     }
 }
@@ -32,14 +33,17 @@ public class Test : MonoBehaviour
     {
         batchRendererGroup = new BatchRendererGroup(OnCulling);
 
-        int index = batchRendererGroup.AddBatch(mesh, 0, material, 0, ShadowCastingMode.On, true, false, new Bounds(Vector3.zero,Vector3.one), 10, null, null);
-        mt = batchRendererGroup.GetBatchMatrices(index);
-
-        AddJob addJob = new AddJob
+        for (int i = 0; i < 50; i++)
         {
-            matrixes = mt
-        };
-        addJob.Run(mt.Length);
+            int index = batchRendererGroup.AddBatch(mesh, 0, material, 0, ShadowCastingMode.On, true, false, new Bounds(Vector3.zero, Vector3.one), 1000, null, null);
+            mt = batchRendererGroup.GetBatchMatrices(index);
+
+            AddJob addJob = new AddJob
+            {
+                matrixes = mt
+            };
+            addJob.Run(mt.Length);
+        }
     }
 
     private void OnDisable()

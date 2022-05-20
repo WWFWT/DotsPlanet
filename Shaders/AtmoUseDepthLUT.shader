@@ -16,6 +16,7 @@ Shader "MyShader/AtmoUseDepthLUT"
 
 		HLSLINCLUDE
 		#include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
+		#include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Lighting.hlsl"
 		#include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/DeclareDepthTexture.hlsl"
 		static const float maxFloat = 3.402823466e+38;
 		//米式散射相位函数g值
@@ -64,19 +65,7 @@ Shader "MyShader/AtmoUseDepthLUT"
 			HLSLPROGRAM
 			#pragma vertex vert
 			#pragma fragment frag
-			//#pragma enable_d3d11_debug_symbols
-
-			struct appdata
-			{
-				float4 vertex : POSITION;
-				float2 uv : TEXCOORD0;
-			};
-
-			struct v2f
-			{
-				float2 uv : TEXCOORD0;
-				float4 vertex : SV_POSITION;
-			};
+			#pragma enable_d3d11_debug_symbols
 
 			// Returns vector (dstToSphere, dstThroughSphere)
 			// If ray origin is inside sphere, dstToSphere = 0
@@ -271,31 +260,36 @@ Shader "MyShader/AtmoUseDepthLUT"
 					return (result_M + result_R + result_Sun) * _SunLight * _SunStrength;
 				}
 
-				return (result_R) * _SunLight * _SunStrength;
+				return (result_R + result_M) * _SunLight * _SunStrength;
 			}
+
+			struct appdata
+			{
+				float4 vertex : POSITION;
+				float2 uv : TEXCOORD0;
+			};
+
+			struct v2f
+			{
+				float2 uv : TEXCOORD0;
+				float4 vertex : SV_POSITION;
+				float ShadowCoords : TEXCOORD1;
+			};
 
 			v2f vert(appdata v)
 			{
 				v2f o;
 				o.vertex = TransformObjectToHClip(v.vertex.xyz);
 				o.uv = v.uv;
-
+				o.ShadowCoords = ComputeScreenPos(o.vertex);
 				return o;
-			}
-
-			void GetRay(float2 uv, out float3 rayStart, out float3 rayDir, out float rayLen)
-			{
-				float sceneRawDepth = SAMPLE_DEPTH_TEXTURE(_CameraDepthTexture, sampler_CameraDepthTexture, uv);
-				float3 worldPos = ComputeWorldSpacePosition(uv, sceneRawDepth, UNITY_MATRIX_I_VP);
-
-				float3 camToPoint = worldPos - _WorldSpaceCameraPos;
-				rayStart = _WorldSpaceCameraPos;
-				rayDir = normalize(camToPoint);
-				rayLen = length(camToPoint);
 			}
 
 			float4 frag(v2f i) : SV_Target
 			{
+				//float test = SAMPLE_TEXTURE2D(_ScreenSpaceShadowmapTexture, sampler_ScreenSpaceShadowmapTexture, i.uv);
+				//return float4(test, test, test, 1);
+				
 				float4 originalCol = SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex,i.uv);
 				float sceneRawDepth = SAMPLE_DEPTH_TEXTURE(_CameraDepthTexture, sampler_CameraDepthTexture, i.uv);
 				float3 worldPos = ComputeWorldSpacePosition(i.uv, sceneRawDepth, UNITY_MATRIX_I_VP);
@@ -318,6 +312,8 @@ Shader "MyShader/AtmoUseDepthLUT"
 					showSun = true;
 				}
 
+				float mainLightShadow = 1;
+
 				if (dstThroughAtmo > 0)
 				{
 					//A点
@@ -336,8 +332,12 @@ Shader "MyShader/AtmoUseDepthLUT"
 					}
 					float3 extinction = 0;
 					float3 atmoCol = CalculateLightColor(eyeHitPos, rayDir, dstThroughAtmo, inver, showSun, extinction);
+					if (!showSun) {
+						float4 coords = TransformWorldToShadowCoord(worldPos);
+						mainLightShadow = SAMPLE_TEXTURE2D_SHADOW(_MainLightShadowmapTexture, sampler_MainLightShadowmapTexture, coords.xyz);
+					}
 
-					return float4(atmoCol,1) + originalCol * float4(extinction,1);
+					return float4(atmoCol,1) * mainLightShadow + originalCol * float4(extinction,1);
 				}
 				else 
 				{
