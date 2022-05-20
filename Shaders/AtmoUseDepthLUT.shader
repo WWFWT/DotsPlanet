@@ -121,6 +121,7 @@ Shader "MyShader/AtmoUseDepthLUT"
 				float3 attenuation_M = 0;
 				float3 step = (dstThroughAtmo * normalize(lookDir)) / (_SampleCount - 1);
 				float stepSize = length(step);
+				float3 extinctionAP, extinctionCP;
 
 				//Pµã
 				float3 pos = eyeHitPos;
@@ -182,6 +183,10 @@ Shader "MyShader/AtmoUseDepthLUT"
 
 						TAP_R = exp(-_RayleighSct * depth.x * _RScatteringIntensity);
 						TAP_M = exp(-_MieSct * depth.y * _MScatteringIntensity);
+
+						if (i == 0) {
+							extinctionAP = TAP_R * TAP_M;
+						}
 					}
 					else 
 					{
@@ -227,6 +232,10 @@ Shader "MyShader/AtmoUseDepthLUT"
 
 						TAP_R = lerp(tempTAP_R1, tempTAP_R2, inver);
 						TAP_M = lerp(tempTAP_M1, tempTAP_M2, inver);
+
+						if (i == 0) {
+							extinctionAP = TAP_R * TAP_M;
+						}
 					}
 
 					//----------------------Çótcp
@@ -243,7 +252,7 @@ Shader "MyShader/AtmoUseDepthLUT"
 					float2 pDepth = AtmoDensityRatio(pHeight);
 
 					if (i == 0) {
-						extinction = exp(-(_RayleighSct * depth.x * _RScatteringIntensity + _MieSct * depth.y * _MScatteringIntensity));
+						extinctionCP = TCP_R * TCP_M;
 					}
 
 					attenuation_R += TAP_R.rgb * TCP_R.rgb * pDepth.x * stepSize;
@@ -253,6 +262,7 @@ Shader "MyShader/AtmoUseDepthLUT"
 
 				float3 result_R = _RayleighSct * scatterR * attenuation_R;
 				float3 result_M = _MieSct * scatterM * attenuation_M;
+				extinction = extinctionAP * extinctionCP;
 
 				if (showSun) {
 					float sunScatter = PhaseFunctionM(angle, true);
@@ -333,11 +343,14 @@ Shader "MyShader/AtmoUseDepthLUT"
 					float3 extinction = 0;
 					float3 atmoCol = CalculateLightColor(eyeHitPos, rayDir, dstThroughAtmo, inver, showSun, extinction);
 					if (!showSun) {
-						float4 coords = TransformWorldToShadowCoord(worldPos);
-						mainLightShadow = SAMPLE_TEXTURE2D_SHADOW(_MainLightShadowmapTexture, sampler_MainLightShadowmapTexture, coords.xyz);
+						originalCol *= float4(extinction, 1);
 					}
+					//if (!showSun) {
+					//	float4 coords = TransformWorldToShadowCoord(worldPos);
+					//	mainLightShadow = SAMPLE_TEXTURE2D_SHADOW(_MainLightShadowmapTexture, sampler_MainLightShadowmapTexture, coords.xyz);
+					//}
 
-					return float4(atmoCol,1) * mainLightShadow + originalCol * float4(extinction,1);
+					return float4(atmoCol,1) + originalCol;
 				}
 				else 
 				{
