@@ -121,7 +121,7 @@ Shader "MyShader/AtmoUseDepthLUT"
 				float3 attenuation_M = 0;
 				float3 step = (dstThroughAtmo * normalize(lookDir)) / (_SampleCount - 1);
 				float stepSize = length(step);
-				float3 extinctionAP, extinctionCP;
+				float3 extinctionAP = 0, extinctionCP = 0;
 
 				//Pµã
 				float3 pos = eyeHitPos;
@@ -140,6 +140,13 @@ Shader "MyShader/AtmoUseDepthLUT"
 					float sunRayLength = RaySphere(_PlanetCenter,_AtmoRadius,pos,_DirToSun).y;
 					
 					if (sunRayLength > 640000) {
+						pos += step;
+						continue;
+					}
+
+					float4 coords = TransformWorldToShadowCoord(pos);
+					float mainLightShadow = SAMPLE_TEXTURE2D_SHADOW(_MainLightShadowmapTexture, sampler_MainLightShadowmapTexture, coords.xyz);
+					if(mainLightShadow < 0.1) {
 						pos += step;
 						continue;
 					}
@@ -345,10 +352,6 @@ Shader "MyShader/AtmoUseDepthLUT"
 					if (!showSun) {
 						originalCol *= float4(extinction, 1);
 					}
-					//if (!showSun) {
-					//	float4 coords = TransformWorldToShadowCoord(worldPos);
-					//	mainLightShadow = SAMPLE_TEXTURE2D_SHADOW(_MainLightShadowmapTexture, sampler_MainLightShadowmapTexture, coords.xyz);
-					//}
 
 					return float4(atmoCol,1) + originalCol;
 				}
