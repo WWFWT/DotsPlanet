@@ -275,9 +275,6 @@
         },
         {
             "m_Id": "a6585202d18b47808161ec9546516a7d"
-        },
-        {
-            "m_Id": "9c6b2183b2764bcf8151fe1a51158499"
         }
     ],
     "m_GroupDatas": [
@@ -1393,9 +1390,6 @@
             },
             {
                 "m_Id": "79cacb3ce7284f83a42f22899b634fa1"
-            },
-            {
-                "m_Id": "9c6b2183b2764bcf8151fe1a51158499"
             }
         ]
     },
@@ -5585,30 +5579,6 @@
 
 {
     "m_SGVersion": 0,
-    "m_Type": "UnityEditor.ShaderGraph.NormalMaterialSlot",
-    "m_ObjectId": "903d1bba9eb148fcaee2499e022e7ce9",
-    "m_Id": 0,
-    "m_DisplayName": "Normal (Object Space)",
-    "m_SlotType": 0,
-    "m_Hidden": false,
-    "m_ShaderOutputName": "NormalOS",
-    "m_StageCapability": 2,
-    "m_Value": {
-        "x": 0.0,
-        "y": 0.0,
-        "z": 0.0
-    },
-    "m_DefaultValue": {
-        "x": 0.0,
-        "y": 0.0,
-        "z": 0.0
-    },
-    "m_Labels": [],
-    "m_Space": 0
-}
-
-{
-    "m_SGVersion": 0,
     "m_Type": "UnityEditor.ShaderGraph.SamplerStateMaterialSlot",
     "m_ObjectId": "92e09fe56a8c4462bb5cdcb0a4585b00",
     "m_Id": 3,
@@ -5972,39 +5942,6 @@
     "m_Value": 0.0,
     "m_DefaultValue": 0.0,
     "m_Labels": []
-}
-
-{
-    "m_SGVersion": 0,
-    "m_Type": "UnityEditor.ShaderGraph.BlockNode",
-    "m_ObjectId": "9c6b2183b2764bcf8151fe1a51158499",
-    "m_Group": {
-        "m_Id": ""
-    },
-    "m_Name": "SurfaceDescription.NormalOS",
-    "m_DrawState": {
-        "m_Expanded": true,
-        "m_Position": {
-            "serializedVersion": "2",
-            "x": 0.0,
-            "y": 0.0,
-            "width": 0.0,
-            "height": 0.0
-        }
-    },
-    "m_Slots": [
-        {
-            "m_Id": "903d1bba9eb148fcaee2499e022e7ce9"
-        }
-    ],
-    "synonyms": [],
-    "m_Precision": 0,
-    "m_PreviewExpanded": true,
-    "m_PreviewMode": 0,
-    "m_CustomColors": {
-        "m_SerializableColors": []
-    },
-    "m_SerializedDescriptor": "SurfaceDescription.NormalOS"
 }
 
 {
@@ -7899,7 +7836,7 @@
     "m_Type": "UnityEditor.Rendering.Universal.ShaderGraph.UniversalLitSubTarget",
     "m_ObjectId": "d79ed0a2c1714eae861242128a301dea",
     "m_WorkflowMode": 1,
-    "m_NormalDropOffSpace": 1,
+    "m_NormalDropOffSpace": 0,
     "m_ClearCoat": false
 }
 

@@ -105,7 +105,6 @@ public partial class TileSystem : SystemBase
 
         vectors = new NativeArray<Vector3>(3, Allocator.Persistent);
         vertices = new NativeArray<Vector3>(oneMeshVerticesCount, Allocator.Persistent);
-
         InitTrangleIndex();
         AllocateMem();
         InitComputeShader();
@@ -517,8 +516,7 @@ public partial class TileSystem : SystemBase
         mesh.MarkDynamic();
         mesh.Clear();
         mesh.name = "Tile";
-        SubdivideTriangles(originalVertices, tile.isSea);
-        mesh.vertices = calVexRet;
+        mesh.vertices = SubdivideTriangles(originalVertices, tile.isSea);
         mesh.uv = uv;
         if (optimozeIndex == null)
         {

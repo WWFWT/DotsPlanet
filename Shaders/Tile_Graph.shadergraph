@@ -295,9 +295,6 @@
             "m_Id": "76d0264935e94f768c2c794a25e598e4"
         },
         {
-            "m_Id": "8f43117d06b7478eacb0182ee9bd7013"
-        },
-        {
             "m_Id": "20d12932be2b409798786815ed3c48cf"
         },
         {
@@ -1592,9 +1589,6 @@
             },
             {
                 "m_Id": "76d0264935e94f768c2c794a25e598e4"
-            },
-            {
-                "m_Id": "8f43117d06b7478eacb0182ee9bd7013"
             }
         ]
     },
@@ -6934,39 +6928,6 @@
 
 {
     "m_SGVersion": 0,
-    "m_Type": "UnityEditor.ShaderGraph.BlockNode",
-    "m_ObjectId": "8f43117d06b7478eacb0182ee9bd7013",
-    "m_Group": {
-        "m_Id": ""
-    },
-    "m_Name": "SurfaceDescription.NormalOS",
-    "m_DrawState": {
-        "m_Expanded": true,
-        "m_Position": {
-            "serializedVersion": "2",
-            "x": 0.0,
-            "y": 0.0,
-            "width": 0.0,
-            "height": 0.0
-        }
-    },
-    "m_Slots": [
-        {
-            "m_Id": "dc941a74bc1c45e7b0e47fb01e3521f1"
-        }
-    ],
-    "synonyms": [],
-    "m_Precision": 0,
-    "m_PreviewExpanded": true,
-    "m_PreviewMode": 0,
-    "m_CustomColors": {
-        "m_SerializableColors": []
-    },
-    "m_SerializedDescriptor": "SurfaceDescription.NormalOS"
-}
-
-{
-    "m_SGVersion": 0,
     "m_Type": "UnityEditor.ShaderGraph.Vector1MaterialSlot",
     "m_ObjectId": "8f5bb519b0b94be5846436af99a17289",
     "m_Id": 1,
@@ -7832,7 +7793,7 @@
     "m_Type": "UnityEditor.Rendering.Universal.ShaderGraph.UniversalLitSubTarget",
     "m_ObjectId": "a80f55a155524e0e9c94d91c84daa7a2",
     "m_WorkflowMode": 1,
-    "m_NormalDropOffSpace": 1,
+    "m_NormalDropOffSpace": 0,
     "m_ClearCoat": false
 }
 
@@ -9358,30 +9319,6 @@
     "m_ShaderOutputName": "Out",
     "m_StageCapability": 3,
     "m_BareResource": false
-}
-
-{
-    "m_SGVersion": 0,
-    "m_Type": "UnityEditor.ShaderGraph.NormalMaterialSlot",
-    "m_ObjectId": "dc941a74bc1c45e7b0e47fb01e3521f1",
-    "m_Id": 0,
-    "m_DisplayName": "Normal (Object Space)",
-    "m_SlotType": 0,
-    "m_Hidden": false,
-    "m_ShaderOutputName": "NormalOS",
-    "m_StageCapability": 2,
-    "m_Value": {
-        "x": 0.0,
-        "y": 0.0,
-        "z": 0.0
-    },
-    "m_DefaultValue": {
-        "x": 0.0,
-        "y": 0.0,
-        "z": 0.0
-    },
-    "m_Labels": [],
-    "m_Space": 0
 }
 
 {

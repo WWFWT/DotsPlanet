@@ -51,6 +51,7 @@ public partial class TreeSystem : SystemBase
             tempParam.Dispose();
             prefabs = new NativeArray<Entity>(tempList.ToArray(), Allocator.Persistent);
             tempList.Dispose();
+
         }
     }
 

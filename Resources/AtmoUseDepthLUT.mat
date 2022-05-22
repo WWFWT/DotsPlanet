@@ -42,8 +42,8 @@ Material:
     m_Floats:
     - _CloudUV_Scale: 1
     - _DitherDepth: 5000
-    - _DitherHeight: 30000
-    - _DitherWidth: 30000
+    - _DitherHeight: 10000
+    - _DitherWidth: 10000
     - _UseCloud: 0
     - _WeatherTexScale: 1
     m_Colors: []
