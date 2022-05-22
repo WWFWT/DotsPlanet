@@ -4,6 +4,10 @@ Shader "MyShader/AtmoUseDepthLUT"
 	{
 		_MainTex("Texture", 2D) = "white" {}
 		_AtmoDepthLUT("AtmoDepthLUT",2D) = "white"{}
+		_DitherMask("_DitherMask",2D) = "white"{}
+		_DitherHeight("DitherHeight",float) = 0
+		_DitherWidth("DitherWidth",float) = 0
+		_DitherDepth("DitherDepth",float) = 0
 	}
 	SubShader
 	{
@@ -47,11 +51,18 @@ Shader "MyShader/AtmoUseDepthLUT"
 		float _RScatteringIntensity;
 		float _MScatteringIntensity;
 
+		float _DitherHeight;
+		float _DitherWidth;
+		float _DitherDepth;
+
 		TEXTURE2D(_MainTex);
 		SAMPLER(sampler_MainTex);
 
 		TEXTURE2D(_AtmoDepthLUT);
 		SAMPLER(sampler_AtmoDepthLUT);
+
+		TEXTURE2D(_DitherMask);
+		SAMPLER(sampler_DitherMask);
 
 		CBUFFER_END
 
@@ -114,6 +125,59 @@ Shader "MyShader/AtmoUseDepthLUT"
 				return (1 - k * k) / ((4 * PI) * (1 - kcosth) * (1 - kcosth));
 			}
 
+			float DitherShadowTex(float3 coords)
+			{
+				//以UV 0~1分为4pxel时块的长度
+				float widColm = 1.0 / float(_DitherWidth);
+				float heiColm = 1.0 / float(_DitherHeight);
+				float depColm = 1.0 / float(_DitherDepth);
+
+				//计算获得颜色的UV
+				float3 getPixelUV = float3(
+					floor(coords.x / widColm) * widColm + (widColm * 0.5),
+					floor(coords.y / heiColm) * heiColm + (heiColm * 0.5),
+					floor(coords.z / depColm) * depColm + (depColm * 0.5)
+					);
+
+				//单色（以0～1取得）
+				float grayScale = SAMPLE_TEXTURE2D_SHADOW(_MainLightShadowmapTexture, sampler_MainLightShadowmapTexture, getPixelUV.xyz);
+
+				//提取纹理
+				float2 ditherUV = float2(frac(coords.x / widColm), frac(coords.y / heiColm));
+				float value = SAMPLE_TEXTURE2D(_DitherMask, sampler_DitherMask, ditherUV).rgb;
+				return step(value, grayScale);
+			}
+
+			float Rand(float3 n)
+			{
+				return sin(dot(n, half3(1233.224, 1743.335, 2253.446)));
+			}
+
+			static const int _Iteration = 5;
+			static const float _BlurRadius = 0.0001;
+			float GrainyBlur(float3 texcoord)
+			{
+				float3 randomOffset = float3(0.0, 0.0, 0.0);
+				float finalColor = 0.0;
+				float random = Rand(texcoord);
+
+				for (int k = 0; k < int(_Iteration); k++)
+				{
+					random = frac(43758.5453 * random + 0.61432);;
+					randomOffset.x = (random - 0.5) * 2.0;
+					random = frac(43758.5453 * random + 0.61432);
+					randomOffset.y = (random - 0.5) * 2.0;
+					random = frac(43758.5453 * random + 0.61432);
+					randomOffset.z = (random - 0.5) * 2.0;
+
+					float3 uv = float3(texcoord + randomOffset * _BlurRadius);
+
+					finalColor += DitherShadowTex(uv);
+					//finalColor += SAMPLE_TEXTURE2D_SHADOW(_MainLightShadowmapTexture, sampler_MainLightShadowmapTexture, uv);
+				}
+				return finalColor / _Iteration;
+			}
+
 			//计算一条视线上最终光的颜色 sceneDepth为像素到摄像机的距离
 			float3 CalculateLightColor(float3 eyeHitPos,float3 lookDir,float dstThroughAtmo,float inver,float showSun, out float3 extinction)
 			{
@@ -144,11 +208,15 @@ Shader "MyShader/AtmoUseDepthLUT"
 						continue;
 					}
 
-					float4 coords = TransformWorldToShadowCoord(pos);
-					float mainLightShadow = SAMPLE_TEXTURE2D_SHADOW(_MainLightShadowmapTexture, sampler_MainLightShadowmapTexture, coords.xyz);
-					if(mainLightShadow < 0.1) {
-						pos += step;
-						continue;
+					if (!showSun) {
+						float4 coords = TransformWorldToShadowCoord(pos);
+						//float mainLightShadow = DitherShadowTex(coords);
+						float mainLightShadow = GrainyBlur(coords);
+						//float mainLightShadow = SAMPLE_TEXTURE2D_SHADOW(_MainLightShadowmapTexture, sampler_MainLightShadowmapTexture, coords.xyz);
+						if (mainLightShadow < 0.1) {
+							pos += step;
+							continue;
+						}
 					}
 
 					//C点
@@ -305,11 +373,15 @@ Shader "MyShader/AtmoUseDepthLUT"
 			float4 frag(v2f i) : SV_Target
 			{
 				//float test = SAMPLE_TEXTURE2D(_ScreenSpaceShadowmapTexture, sampler_ScreenSpaceShadowmapTexture, i.uv);
-				//return float4(test, test, test, 1);
+				//return test;
 				
 				float4 originalCol = SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex,i.uv);
 				float sceneRawDepth = SAMPLE_DEPTH_TEXTURE(_CameraDepthTexture, sampler_CameraDepthTexture, i.uv);
 				float3 worldPos = ComputeWorldSpacePosition(i.uv, sceneRawDepth, UNITY_MATRIX_I_VP);
+
+				float4 coords = TransformWorldToShadowCoord(worldPos);
+				//return GrainyBlur(coords.xyz);
+				//return DitherShadowTex(coords);
 
 				float3 camToPoint = worldPos - _WorldSpaceCameraPos;
 				float3 rayStart = _WorldSpaceCameraPos;

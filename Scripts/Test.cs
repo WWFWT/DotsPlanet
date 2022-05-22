@@ -49,6 +49,7 @@ public class Test : MonoBehaviour
     private void OnDisable()
     {
         batchRendererGroup.Dispose();
+
     }
 
     // Update is called once per frame
