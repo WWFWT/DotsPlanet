@@ -4,7 +4,7 @@ unity 2020.3.33f1c2
 Dots 0.50.0
 
 效果图：
-![image](https://imgtu.com/i/jXopWV)
+![image]https://imgtu.com/i/jXopWV
 ![image](https://imgtu.com/i/jXo9zT)
 ![image](https://imgtu.com/i/jXoSJ0)
 
