@@ -1,6 +1,9 @@
 用Dots实现的与地球1：1大小的星球，同时实现了用LUT优化的大气散射
 
 
+[视频展示点这里](https://www.bilibili.com/video/BV1TF41177vh)
+
+
 [想学习这里面相关技术的小伙伴点这里](https://blog.csdn.net/weixin_44286745/category_11932481.html)（喜欢的小伙伴可以支持一下，人在深圳，快交不起房租了QAQ，不得已）
 
 
