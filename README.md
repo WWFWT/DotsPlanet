@@ -5,8 +5,8 @@ Dots 0.50.0
 
 效果图：
 [![jXopWV.png](https://s1.ax1x.com/2022/07/23/jXopWV.png)](https://imgtu.com/i/jXopWV)
-![image](https://imgtu.com/i/jXo9zT)
-![image](https://imgtu.com/i/jXoSJ0)
+[![jXo9zT.png](https://s1.ax1x.com/2022/07/23/jXo9zT.png)](https://imgtu.com/i/jXo9zT)
+[![jXoSJ0.png](https://s1.ax1x.com/2022/07/23/jXoSJ0.png)](https://imgtu.com/i/jXoSJ0)
 
 TODO：
 1.由于Dots仍然处于体验版，莫名其妙的bug有点多，后续将出一个正常的使用URP的版本
